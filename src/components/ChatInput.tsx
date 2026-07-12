@@ -1,7 +1,6 @@
 import { useRef, useState, useCallback, forwardRef, useImperativeHandle, useEffect, type KeyboardEvent, type DragEvent, type ClipboardEvent } from 'react'
 import type { LocalAttachment, MessageAttachment } from '../mockData'
 import { AttachmentCard } from './FileCard'
-import { getDesktopBridge, isDesktop } from '../lib/desktopBridge'
 
 // 视频不允许上传：super-king 没有视频处理能力，agent 也看不了视频
 const BLOCKED_EXT = ['mp4', 'mov', 'avi', 'mkv', 'webm', 'flv', 'wmv', 'm4v', '3gp']
@@ -119,10 +118,6 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   }
 
   const hasSpeechAPI = !!(typeof window !== 'undefined' && ((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition))
-  // Electron 桌面端：Web Speech API 在 Electron 33 内的 Chromium 中已被禁用
-  // （Google 不再公开 cloud speech API key）。能创建对象但 start() 后无 audio。
-  // 用 isDesktop 提示用户。
-  const isInsideElectron = typeof window !== 'undefined' && !!(window as any).piDesktop
 
   // 主动获取麦克风权限并保留 stream 句柄：
   // - 这是触发 Electron / Windows 系统级麦克风权限弹窗的标准方式
@@ -262,8 +257,8 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
         console.warn('[speech] onerror:', e.error)
         const recoverable = e.error === 'no-speech' || e.error === 'aborted' || e.error === 'audio-capture' || e.error === 'network'
         // network 在 Electron 里通常意味着 Google Speech API 不可达
-        if (e.error === 'network' && isInsideElectron) {
-          flashMicToast('桌面端可能无法访问 Google 语音服务，建议使用浏览器版本或检查网络')
+        if (e.error === 'network') {
+          flashMicToast('网络不可用，无法连接语音服务')
         } else if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
           flashMicToast('麦克风权限被拒绝，请在系统设置中允许')
         }
@@ -286,11 +281,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
           aliveProbeRef.current = null
           if (!aliveSignalSeen && shouldKeepRecordingRef.current) {
             console.warn('[speech] no alive signal in 1.8s, likely SpeechRecognition is disabled in this runtime')
-            if (isInsideElectron) {
-              flashMicToast('桌面端不支持语音识别（Electron 限制），请在浏览器中使用 / 在设置中查看')
-            } else {
-              flashMicToast('语音识别似乎没启动，请检查麦克风权限')
-            }
+            flashMicToast('语音识别似乎没启动，请检查麦克风权限')
           }
         }, 1800)
       } catch (err) {
@@ -304,7 +295,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
       flashMicToast('当前环境不支持语音识别')
       shouldKeepRecordingRef.current = false
     }
-  }, [recording, hasSpeechAPI, isInsideElectron])
+  }, [recording, hasSpeechAPI])
 
   const stopRecording = useCallback(() => {
     shouldKeepRecordingRef.current = false
@@ -370,7 +361,6 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
 
   const processFiles = useCallback((files: FileList | File[] | null | undefined) => {
     if (!files || files.length === 0) return
-    const bridge = isDesktop ? getDesktopBridge() : null
 
     for (let i = 0; i < files.length; i++) {
       const file = files[i]
@@ -388,52 +378,19 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
       }
       setAttachments((prev) => [...prev, baseEntry])
 
-      if (blockedReason) continue  // 拒绝视频：直接挂错误，不上传
+      if (blockedReason) continue
 
-      // 浏览器模式（非桌面）：没有 IPC 能力，保留旧的 setTimeout 假进度兜底
-      if (!bridge?.file?.writeBlobToTemp) {
-        const steps = [10, 25, 40, 60, 75, 90, 100]
-        steps.forEach((p, si) => {
-          const timer = setTimeout(() => {
-            setAttachments((prev) => prev.map((a) => (
-              a.id === id
-                ? { ...a, progress: p, status: p === 100 ? 'ready' : 'uploading' }
-                : a
-            )))
-          }, 200 * (si + 1))
-          uploadTimersRef.current.push(timer)
-        })
-        continue
-      }
-
-      // 桌面模式真上传：File -> ArrayBuffer -> IPC writeBlobToTemp
-      ;(async () => {
-        try {
-          setAttachments((prev) => prev.map((a) => (a.id === id ? { ...a, progress: 15 } : a)))
-          const buffer = await file.arrayBuffer()
-          setAttachments((prev) => prev.map((a) => (a.id === id ? { ...a, progress: 50 } : a)))
-
-          const res = await bridge.file.writeBlobToTemp({
-            buffer: new Uint8Array(buffer),
-            fileName: file.name,
-          })
-          if (!res.ok || !res.tempPath) {
-            throw new Error(res.error ?? '写入临时文件失败')
-          }
+      const steps = [10, 25, 40, 60, 75, 90, 100]
+      steps.forEach((p, si) => {
+        const timer = setTimeout(() => {
           setAttachments((prev) => prev.map((a) => (
             a.id === id
-              ? { ...a, progress: 100, status: 'ready', tempPath: res.tempPath }
+              ? { ...a, progress: p, status: p === 100 ? 'ready' : 'uploading' }
               : a
           )))
-        } catch (err) {
-          const msg = err instanceof Error ? err.message : String(err)
-          setAttachments((prev) => prev.map((a) => (
-            a.id === id
-              ? { ...a, progress: 100, status: 'error', error: `上传失败：${msg}` }
-              : a
-          )))
-        }
-      })()
+        }, 200 * (si + 1))
+        uploadTimersRef.current.push(timer)
+      })
     }
   }, [])
 

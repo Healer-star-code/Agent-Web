@@ -1055,12 +1055,6 @@ function SharePanel({ session, onToast, onClose }: { session: SessionInfo; onToa
   }
 
   async function handleExport(format: ShareFormat) {
-    if (typeof window === 'undefined' || !window.piDesktop?.file?.saveText) {
-      onToast?.('当前环境不支持导出文件', 'error')
-      return
-    }
-    const bridge = window.piDesktop
-
     await withLoadedMessages(async (messages) => {
       const title = safeFileName(getSessionTitle(session))
       const config = (() => {
@@ -1069,20 +1063,20 @@ function SharePanel({ session, onToast, onClose }: { session: SessionInfo; onToa
             return {
               content: formatSessionToMarkdown(session, messages),
               defaultFileName: `${title}.md`,
-              filters: [{ name: 'Markdown', extensions: ['md'] }, { name: 'Text', extensions: ['txt'] }],
+              mimeType: 'text/markdown',
             }
           case 'html':
             return {
               content: formatSessionToHtml(session, messages),
               defaultFileName: `${title}.html`,
-              filters: [{ name: 'HTML', extensions: ['html'] }],
+              mimeType: 'text/html',
             }
           case 'txt':
           default:
             return {
               content: formatSessionToTxt(session, messages),
               defaultFileName: `${title}.txt`,
-              filters: [{ name: 'Text', extensions: ['txt'] }],
+              mimeType: 'text/plain',
             }
         }
       })()
@@ -1094,16 +1088,31 @@ function SharePanel({ session, onToast, onClose }: { session: SessionInfo; onToa
       }
 
       try {
-        const result = await bridge.file.saveText(config)
-        if (result.canceled) return
-        if (result.ok && result.savedTo) {
-          onToast?.(`已保存到 ${result.savedTo}`, 'success')
-          onClose()
+        const blob = new Blob([config.content], { type: config.mimeType })
+        if ('showSaveFilePicker' in window) {
+          const picker = (window as unknown as { showSaveFilePicker: (opts: unknown) => Promise<FileSystemFileHandle> }).showSaveFilePicker
+          const handle = await picker({
+            suggestedName: config.defaultFileName,
+            types: [{
+              description: config.defaultFileName.endsWith('.md') ? 'Markdown' : config.defaultFileName.endsWith('.html') ? 'HTML' : 'Text',
+              accept: { [config.mimeType]: ['.' + config.defaultFileName.split('.').pop()] },
+            }],
+          })
+          const writable = await handle.createWritable()
+          await writable.write(blob)
+          await writable.close()
+          onToast?.('已保存', 'success')
         } else {
-          onToast?.('保存失败：' + (result.error || '未知错误'), 'error')
+          const a = document.createElement('a')
+          a.href = URL.createObjectURL(blob)
+          a.download = config.defaultFileName
+          a.click()
+          URL.revokeObjectURL(a.href)
         }
+        onClose()
       } catch (err) {
-        console.warn('[SharePanel] saveText failed', err)
+        if (err instanceof DOMException && err.name === 'AbortError') return
+        console.warn('[SharePanel] export failed', err)
         onToast?.('保存失败：' + (err instanceof Error ? err.message : String(err)), 'error')
       }
     })

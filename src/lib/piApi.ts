@@ -4,9 +4,6 @@ export interface ApiImagePayload {
   data: string
 }
 
-// Side-effect import 注册 window.piDesktop 类型
-import './desktopBridge'
-
 export interface PromptPayload {
   message: string
   images?: ApiImagePayload[]
@@ -124,34 +121,13 @@ const DEFAULT_API_BASE = '/superking-api'
 const LS_SERVER_URL = 'pi-server-url'
 const LS_PASSWORD = 'pi-server-password'
 
-function isDevFrontend(): boolean {
-  return typeof window !== 'undefined' && window.location.host === 'localhost:5173'
-}
-
-function isElectronRuntime(): boolean {
-  return typeof window !== 'undefined' && !!(window as unknown as { piDesktop?: unknown }).piDesktop
-}
-
-function shouldUseProxy(savedUrl: string): boolean {
-  return isDevFrontend() && /^https?:\/\/(127\.0\.0\.1|localhost):30142\/?$/.test(savedUrl.trim())
-}
-
 export function getApiBase(): string {
   try {
     const fromLs = localStorage.getItem(LS_SERVER_URL)
-    if (fromLs) {
-      if (shouldUseProxy(fromLs)) return DEFAULT_API_BASE
-      // Electron 打包后用 file:// 加载页面，"/superking-api" 这种相对路径会拼成
-      // file:///superking-api 而失败。强制改为直连 127.0.0.1:30142。
-      if (isElectronRuntime() && fromLs === '/superking-api') {
-        return 'http://127.0.0.1:30142'
-      }
-      return fromLs
-    }
+    if (fromLs) return fromLs
   } catch { /* ignore */ }
   const envBase = import.meta.env.VITE_PI_API_BASE as string | undefined
   if (envBase) return envBase
-  if (isElectronRuntime()) return 'http://127.0.0.1:30142'
   return DEFAULT_API_BASE
 }
 
@@ -293,9 +269,6 @@ async function localRequestJson<T>(path: string, init?: RequestInit, options?: {
 }
 
 export async function getLocalSkillsRoot(): Promise<{ path: string }> {
-  if (typeof window !== 'undefined' && window.piDesktop?.local?.getSkillsRoot) {
-    return window.piDesktop.local.getSkillsRoot()
-  }
   return localRequestJson<{ path: string }>('/api/local/skills/root')
 }
 
@@ -322,17 +295,6 @@ function setCachedLocalSkills(root: string, skills: SkillInfo[]) {
 }
 
 export async function listLocalSkills(): Promise<{ skills: SkillInfo[]; root: string }> {
-  if (typeof window !== 'undefined' && window.piDesktop?.local?.listSkills) {
-    const data = await window.piDesktop.local.listSkills()
-    const skills: SkillInfo[] = data.skills.map((s) => ({
-      name: s.name,
-      description: s.description,
-      source: s.source,
-      enabled: s.enabled,
-    }))
-    setCachedLocalSkills(data.root, skills)
-    return { skills, root: data.root }
-  }
   const data = await localRequestJson<{ skills: SkillInfo[]; root: string }>('/api/local/skills')
   setCachedLocalSkills(data.root, data.skills)
   return data
@@ -352,13 +314,6 @@ export async function listLocalSkillsWithCache(): Promise<{ skills: SkillInfo[];
 }
 
 export async function openLocalFolder(path?: string): Promise<void> {
-  if (typeof window !== 'undefined' && window.piDesktop?.local?.openFolder) {
-    const result = await window.piDesktop.local.openFolder(path)
-    if (!result.ok) {
-      throw new Error(result.error ?? '无法打开文件夹')
-    }
-    return
-  }
   await localRequestJson<{ ok: true }>('/api/local/open-folder', {
     method: 'POST',
     body: JSON.stringify(path ? { path } : {}),
@@ -413,20 +368,11 @@ interface SuperKingMessage {
 }
 
 // ---------------------------------------------------------------------------
-// Directory selection (Electron 优先；浏览器中 fallback 到旧的后端接口/手动输入)
+// Directory selection (通过后端接口；失败由调用方 fallback 手动输入)
 // ---------------------------------------------------------------------------
 
 export async function selectDirectory(): Promise<string | null> {
-  // Electron 桌面客户端：调用原生目录选择
-  if (typeof window !== 'undefined' && window.piDesktop?.dialog?.selectDirectory) {
-    try {
-      return await window.piDesktop.dialog.selectDirectory()
-    } catch (err) {
-      console.warn('[selectDirectory] electron dialog failed', err)
-      return null
-    }
-  }
-  // 浏览器：尝试调一个可能不存在的后端接口；失败由调用方 fallback 手动输入
+  // 尝试调后端接口；失败由调用方 fallback 手动输入
   try {
     const data = await requestJson<{ path: string | null }>('/api/dialog/select-directory', {
       method: 'POST',

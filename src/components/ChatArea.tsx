@@ -60,8 +60,6 @@ import {
   type ConfigInfo,
   type ApiImagePayload,
 } from '../lib/piApi'
-import { detectLocalArtifacts } from '../lib/artifactDetector'
-import { getDesktopBridge, isDesktop } from '../lib/desktopBridge'
 import { createSkillStreamParser, extractSkillBlocks, type SkillStreamParser } from '../lib/skillContentParser'
 
 interface Props {
@@ -716,37 +714,6 @@ export function ChatArea({ session, selectedCwd, newSessionCwd, chatInputRef, on
         return normalized
       })
       forceScrollRef.current = true
-      // 历史消息加载完后，对每条 assistant 消息跑本地路径扫描，让"重新打开会话"也能看到文件卡片
-      if (isDesktop) {
-        const bridge = getDesktopBridge()
-        if (bridge?.file?.stat) {
-          void (async () => {
-            try {
-              let snapshot: Message[] = []
-              setMessages((prev) => { snapshot = prev; return prev })
-              const updates = new Map<string, ArtifactInfo[]>()
-              for (const msg of snapshot) {
-                if (msg.role !== 'assistant' || !msg.content) continue
-                const detected = await detectLocalArtifacts(
-                  msg.content,
-                  sessionId,
-                  msg.artifacts ?? [],
-                  (p) => bridge.file.stat(p),
-                )
-                if (detected.length > 0) updates.set(msg.id, detected)
-              }
-              if (updates.size === 0) return
-              if (normalizeSessionIdRef.current !== sessionId) return
-              setMessages((prev) => prev.map((m) => {
-                const add = updates.get(m.id)
-                return add ? { ...m, artifacts: [...(m.artifacts ?? []), ...add] } : m
-              }))
-            } catch (err) {
-              console.warn('[artifactDetector] history scan failed', err)
-            }
-          })()
-        }
-      }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
       console.error('Normalize messages failed:', err)
@@ -1235,49 +1202,6 @@ export function ChatArea({ session, selectedCwd, newSessionCwd, chatInputRef, on
         if (sessionId) {
           void normalizeMessagesForSession(sessionId)
         }
-        // 启发式扫描：从 assistant 消息文本里抓本地路径，验证存在后追加 artifact 卡片
-        // 仅桌面端（需要 file:stat IPC）；后端已发 backend artifact 的会自动去重
-        console.info(`[artifactDetector] agent_end entry: isDesktop=${isDesktop} sessionId=${sessionId ? 'ok' : 'null'} assistantId=${finishedAssistantId ?? 'null'}`)
-        if (isDesktop && sessionId && finishedAssistantId) {
-          const bridge = getDesktopBridge()
-          console.info(`[artifactDetector] bridge.file.stat available=${!!bridge?.file?.stat}`)
-          if (bridge?.file?.stat) {
-            void (async () => {
-              try {
-                // 用 setMessages(prev => prev) 拿到最新 messages 快照（避免 stale closure）
-                let snapshot: Message[] = []
-                setMessages((prev) => { snapshot = prev; return prev })
-                const target = snapshot.find((m) => m.id === finishedAssistantId)
-                if (!target) {
-                  console.warn(`[artifactDetector] msg=${finishedAssistantId} not found in snapshot (len=${snapshot.length})`)
-                  return
-                }
-                // ⚠️ React setState 是异步的：上面的 flush(setMessages prev.map content+tailText)
-                // 还没真正落地到 state，这里读 target.content 可能是不含 tailText 的旧内容。
-                // 路径文本（"位置: E:\xxx\file.docx"）通常出现在消息末尾，正好在 tailText 里。
-                // 因此必须手动拼接 tailText 再丢给 detector，否则正则匹配不到 → 卡片不出现。
-                const fullText = (target.content ?? '') + (tailText ?? '')
-                console.info(`[artifactDetector] msg=${finishedAssistantId} content.len=${(target.content ?? '').length} tailText.len=${(tailText ?? '').length} fullText.len=${fullText.length}`)
-                console.info(`[artifactDetector] fullText preview: ${fullText.slice(0, 200).replace(/\n/g, '\\n')}${fullText.length > 200 ? '…' : ''}`)
-                const detected = await detectLocalArtifacts(
-                  fullText,
-                  sessionId,
-                  target.artifacts ?? [],
-                  (p) => bridge.file.stat(p),
-                )
-                console.info(`[artifactDetector] msg=${finishedAssistantId} found ${detected.length} local artifact(s)`)
-                if (detected.length === 0) return
-                setMessages((prev) => prev.map((msg) => (
-                  msg.id === finishedAssistantId
-                    ? { ...msg, artifacts: [...(msg.artifacts ?? []), ...detected] }
-                    : msg
-                )))
-              } catch (err) {
-                console.warn('[artifactDetector] scan failed', err)
-              }
-            })()
-          }
-        }
         break
       }
       case 'permission_requested': {
@@ -1511,30 +1435,26 @@ export function ChatArea({ session, selectedCwd, newSessionCwd, chatInputRef, on
       const docFiles: { name: string; relPath: string; absPath: string }[] = []
       let uploadFailedNotice: string[] = []
 
-      if (ready.length > 0 && isDesktop) {
-        const bridge = getDesktopBridge()
-        if (bridge?.file) {
-          for (const att of ready) {
-            const isImg = att.file.type.startsWith('image/')
-            if (isImg) {
-              const r = await bridge.file.readAsBase64(att.tempPath!)
-              if (r.ok && r.data && r.mimeType) {
-                images.push({ name: att.name, mimeType: r.mimeType, data: r.data })
-              } else {
-                uploadFailedNotice.push(`${att.name}（读取失败：${r.error ?? '未知'}）`)
-              }
-            } else {
-              const r = await bridge.file.copyToSession({
-                tempPath: att.tempPath!,
-                cwd: sdkSession.cwd,
-                fileName: att.name,
+      if (ready.length > 0) {
+        for (const att of ready) {
+          const isImg = att.file.type.startsWith('image/')
+          if (isImg) {
+            try {
+              const data = await new Promise<string>((resolve, reject) => {
+                const reader = new FileReader()
+                reader.onload = () => {
+                  const result = reader.result as string
+                  resolve(result.split(',')[1] ?? result)
+                }
+                reader.onerror = () => reject(new Error('读取文件失败'))
+                reader.readAsDataURL(att.file)
               })
-              if (r.ok && r.absPath && r.relPath) {
-                docFiles.push({ name: att.name, relPath: r.relPath, absPath: r.absPath })
-              } else {
-                uploadFailedNotice.push(`${att.name}（复制失败：${r.error ?? '未知'}）`)
-              }
+              images.push({ name: att.name, mimeType: att.file.type, data })
+            } catch {
+              uploadFailedNotice.push(`${att.name}（读取失败）`)
             }
+          } else {
+            uploadFailedNotice.push(`${att.name}（浏览器模式下文档文件暂不支持本地路径上传，请改用 @ 文件引用）`)
           }
         }
       }
@@ -1792,92 +1712,6 @@ export function ChatArea({ session, selectedCwd, newSessionCwd, chatInputRef, on
       }
     }
   }, [])
-
-  // ⭐ 兜底扫描：监听 messages 变化，对任意非流式的 assistant 消息跑 detector。
-  // 这是终极保底——不管 agent_end / normalize / 历史加载哪条路径走对走错，
-  // 只要 message.content 里有路径，最终都会被这里扫到并显示卡片。
-  // 用 scannedForArtifactsRef 按 (msgId + content.length) 去重，避免无限循环。
-  // 200ms debounce：高频 setMessages（流式 delta、normalize、新消息）合并成一次扫描，
-  // 避免 stat 风暴。
-  useEffect(() => {
-    if (!isDesktop || streaming) return
-    const bridge = getDesktopBridge()
-    if (!bridge?.file?.stat) return
-    const sessionId = sdkSessionIdRef.current
-    if (!sessionId) return
-
-    // 取消上一次未触发的 debounce（旧 effect 留下的）
-    if (fallbackScanTimerRef.current) {
-      clearTimeout(fallbackScanTimerRef.current)
-      fallbackScanTimerRef.current = null
-    }
-
-    let cancelled = false
-    // 用局部 timerId 持有定时器引用：即使回调内已经把 ref 置 null，
-    // cleanup 仍能通过 timerId 准确取消（避免 ref 漂移导致的清理漏洞）。
-    const timerId = setTimeout(() => {
-      // 回调真正执行时清掉 ref（ref 仅用于"被新 effect 抢占时取消上一次"）
-      if (fallbackScanTimerRef.current === timerId) {
-        fallbackScanTimerRef.current = null
-      }
-      if (cancelled) return
-
-      const tasks: Array<{ id: string; content: string; existing: ArtifactInfo[] }> = []
-      for (const msg of messages) {
-        if (msg.role !== 'assistant') continue
-        if (!msg.content || msg.content.length < 4) continue
-        const seen = scannedForArtifactsRef.current.get(msg.id)
-        if (seen === msg.content.length) continue
-        tasks.push({ id: msg.id, content: msg.content, existing: msg.artifacts ?? [] })
-      }
-      if (tasks.length === 0) return
-
-      void (async () => {
-        const updates = new Map<string, ArtifactInfo[]>()
-        for (const t of tasks) {
-          // 每次循环开头检查 cancelled：组件 unmount 后立刻退出，
-          // 避免继续做无用 stat，更避免把"已扫描"标记写入但又永远应用不到 UI。
-          if (cancelled) return
-          try {
-            const detected = await detectLocalArtifacts(
-              t.content,
-              sessionId,
-              t.existing,
-              (p) => bridge.file.stat(p),
-            )
-            if (cancelled) return
-            // OCR 建议：先把结果放进 updates，确认 cancelled 后再标记"已扫描"；
-            // 否则 unmount 时机刚好夹在 set 和 setMessages 之间，
-            // 会把消息永久标记为"已扫描"但卡片永远不出现（重 mount 也跳过）。
-            if (detected.length > 0) updates.set(t.id, detected)
-            scannedForArtifactsRef.current.set(t.id, t.content.length)
-          } catch (err) {
-            console.warn('[fallback-scan] failed for', t.id, err)
-          }
-        }
-        if (cancelled || updates.size === 0) return
-        console.info(`[fallback-scan] applying ${updates.size} update(s)`)
-        setMessages((prev) => prev.map((m) => {
-          const add = updates.get(m.id)
-          if (!add) return m
-          const existingPaths = new Set((m.artifacts ?? []).map((a) => (a.localPath ?? a.path ?? '').toLowerCase()))
-          const keep = add.filter((a) => !existingPaths.has((a.localPath ?? a.path ?? '').toLowerCase()))
-          if (keep.length === 0) return m
-          return { ...m, artifacts: [...(m.artifacts ?? []), ...keep] }
-        }))
-      })()
-    }, 200)
-    fallbackScanTimerRef.current = timerId
-
-    return () => {
-      cancelled = true
-      // ⭐ 直接清局部 timerId，不依赖 ref（ref 可能已被回调置 null）
-      clearTimeout(timerId)
-      if (fallbackScanTimerRef.current === timerId) {
-        fallbackScanTimerRef.current = null
-      }
-    }
-  }, [messages, streaming])
 
   useEffect(() => {
     // Auto-scroll to bottom only when user is near bottom

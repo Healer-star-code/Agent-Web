@@ -1,9 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { getFileIcon } from './FileIcons'
-import { AlertTriangleIcon, DownloadIcon, PlayIcon } from './Icon'
+import { DownloadIcon } from './Icon'
 import type { ArtifactInfo, MessageAttachment } from '../mockData'
 import { artifactDownloadUrl, type ArtifactInfo as ApiArtifactInfo } from '../lib/piApi'
-import { getDesktopBridge, isDesktop } from '../lib/desktopBridge'
 
 function formatBytes(size?: number): string {
   if (!size && size !== 0) return ''
@@ -66,25 +65,8 @@ export function AttachmentCard({ attachment, compact = false }: { attachment: Me
 }
 
 export function ArtifactCard({ artifact, hideActions = false }: { artifact: ArtifactInfo; hideActions?: boolean }) {
-  // 区分两种 artifact：
-  // - localPath 存在 = 启发式扫描出来的本地文件，走 Electron IPC（保存/打开/定位）
-  // - 否则 = backend artifact，走 HTTP 下载（保留旧行为）
-  const hasLocalPath = !!artifact.localPath
-  const bridge = getDesktopBridge()
-
-  // 探测文件是否还在（仅本地路径需要）
-  const [exists, setExists] = useState<boolean>(artifact.exists ?? true)
-  const [busy, setBusy] = useState<null | 'save' | 'open' | 'reveal'>(null)
+  const [busy, setBusy] = useState<null | 'save'>(null)
   const [toast, setToast] = useState<string | null>(null)
-
-  useEffect(() => {
-    if (!hasLocalPath || !isDesktop || !bridge?.file?.stat) return
-    let cancelled = false
-    bridge.file.stat(artifact.localPath!).then((s) => {
-      if (!cancelled) setExists(!!s.exists)
-    }).catch(() => { /* ignore */ })
-    return () => { cancelled = true }
-  }, [hasLocalPath, artifact.localPath, bridge])
 
   function flashToast(msg: string) {
     setToast(msg)
@@ -95,46 +77,27 @@ export function ArtifactCard({ artifact, hideActions = false }: { artifact: Arti
     if (busy) return
     setBusy('save')
     try {
-      if (hasLocalPath && bridge?.file?.saveAs) {
-        const res = await bridge.file.saveAs(artifact.localPath!)
-        if (res.ok) flashToast(`已保存到 ${res.savedTo}`)
-        else if (!res.canceled && res.error) flashToast(`保存失败：${res.error}`)
+      const url = artifactDownloadUrl(artifact as ApiArtifactInfo)
+      if ('showSaveFilePicker' in window) {
+        const picker = (window as unknown as { showSaveFilePicker: (opts: unknown) => Promise<FileSystemFileHandle> }).showSaveFilePicker
+        const handle = await picker({ suggestedName: artifact.name })
+        const writable = await handle.createWritable()
+        const res = await fetch(url)
+        await writable.write(await res.blob())
+        await writable.close()
+        flashToast('已保存')
       } else {
-        // backend artifact：通过 HTTP 下载 + showSaveFilePicker
-        const url = artifactDownloadUrl(artifact as ApiArtifactInfo)
-        if ('showSaveFilePicker' in window) {
-          const picker = (window as unknown as { showSaveFilePicker: (opts: unknown) => Promise<FileSystemFileHandle> }).showSaveFilePicker
-          const handle = await picker({ suggestedName: artifact.name })
-          const writable = await handle.createWritable()
-          const res = await fetch(url)
-          await writable.write(await res.blob())
-          await writable.close()
-          flashToast('已保存')
-        } else {
-          const a = document.createElement('a')
-          a.href = url
-          a.download = artifact.name
-          a.click()
-        }
+        const a = document.createElement('a')
+        a.href = url
+        a.download = artifact.name
+        a.click()
       }
     } finally {
       setBusy(null)
     }
   }
 
-  async function handleOpen() {
-    if (busy || !hasLocalPath || !bridge?.file?.openLocal) return
-    setBusy('open')
-    try {
-      const r = await bridge.file.openLocal(artifact.localPath!)
-      if (!r.ok) flashToast(`打开失败：${r.error ?? '未知错误'}`)
-    } finally {
-      setBusy(null)
-    }
-  }
-
-  const disabled = hasLocalPath && !exists
-  const opacity = disabled ? 0.55 : 1
+  const opacity = 1
 
   return (
     <div
@@ -167,14 +130,8 @@ export function ArtifactCard({ artifact, hideActions = false }: { artifact: Arti
           {artifact.name}
         </div>
         <div style={{ fontSize: 'var(--font-xs)', color: 'var(--text-dim)', marginTop: 3 }}>
-          {disabled ? (
-            <span style={{ color: 'var(--danger)', display: 'inline-flex', alignItems: 'center', gap: 4 }}><AlertTriangleIcon width={12} height={12} /> 文件已不存在</span>
-          ) : (
-            <>
-              {kindLabel(artifact.kind, artifact.name)}
-              {artifact.size > 0 && ` · ${formatBytes(artifact.size)}`}
-            </>
-          )}
+          {kindLabel(artifact.kind, artifact.name)}
+          {artifact.size > 0 && ` · ${formatBytes(artifact.size)}`}
         </div>
       </div>
 
@@ -183,22 +140,12 @@ export function ArtifactCard({ artifact, hideActions = false }: { artifact: Arti
           <>
             <button
               onClick={handleSaveAs}
-              disabled={disabled || !!busy}
+              disabled={!!busy}
               title="保存到电脑"
-              style={primaryBtn(disabled || !!busy)}
+              style={primaryBtn(!!busy)}
             >
               <DownloadIcon width={13} height={13} /> 保存到电脑
             </button>
-            {hasLocalPath && (
-              <button
-                onClick={handleOpen}
-                disabled={disabled || !!busy}
-                title="用系统默认程序打开"
-                style={ghostBtn(disabled || !!busy)}
-              >
-                <PlayIcon width={12} height={12} /> 打开
-              </button>
-            )}
           </>
         )}
       </div>
@@ -237,19 +184,6 @@ function primaryBtn(disabled: boolean): React.CSSProperties {
     color: disabled ? 'var(--text-dim)' : '#fff',
     fontSize: 'var(--font-sm)',
     fontWeight: 600,
-    cursor: disabled ? 'not-allowed' : 'pointer',
-    whiteSpace: 'nowrap',
-  }
-}
-
-function ghostBtn(disabled: boolean): React.CSSProperties {
-  return {
-    padding: '7px 10px',
-    borderRadius: 'var(--radius-md)',
-    border: '1px solid var(--border)',
-    background: 'transparent',
-    color: 'var(--text)',
-    fontSize: 'var(--font-sm)',
     cursor: disabled ? 'not-allowed' : 'pointer',
     whiteSpace: 'nowrap',
   }

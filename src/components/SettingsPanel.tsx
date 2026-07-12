@@ -1,8 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
 import { testConnection } from '../lib/piApi'
-import { isDesktop, getDesktopBridge } from '../lib/desktopBridge'
-import { DesktopBackendSection } from './DesktopBackendSection'
-import { UpdaterCard } from './UpdaterCard'
 import { ZapIcon, AlertTriangleIcon } from './Icon'
 
 interface Props {
@@ -62,30 +59,6 @@ export function SettingsPanel({ isDark, onThemeChange, fontSize, onFontSizeChang
       console.error('Failed to save server settings to localStorage:', err)
       setPasswordError('保存失败，请检查浏览器是否允许本地存储')
       return false
-    }
-    // Electron 模式下，同步把密码 / URL 写回 electron-store（权威数据源）。
-    // 失败不阻塞，因为 localStorage 已经写成功了。
-    if (isDesktop) {
-      const bridge = getDesktopBridge()
-      if (bridge) {
-        // 解析 trimmedUrl：远程地址 (非 127.0.0.1/localhost) 视为 remoteUrl + useRemote=true
-        const isLocal = /^https?:\/\/(127\.0\.0\.1|localhost)(:\d+)?\/?$/.test(trimmedUrl)
-        const patch: Record<string, unknown> = {
-          superKingPassword: pwd,
-        }
-        if (isLocal) {
-          patch.useRemote = false
-          patch.remoteUrl = ''
-          const m = trimmedUrl.match(/:(\d+)/)
-          if (m) patch.superKingPort = parseInt(m[1], 10)
-        } else if (trimmedUrl) {
-          patch.useRemote = true
-          patch.remoteUrl = trimmedUrl
-        }
-        bridge.settings.set(patch).catch(err => {
-          console.warn('[settings] failed to persist to electron-store:', err)
-        })
-      }
     }
     setPasswordError(null)
     onServerUrlChange(trimmedUrl)
@@ -162,23 +135,6 @@ export function SettingsPanel({ isDark, onThemeChange, fontSize, onFontSizeChang
           <span style={{ fontWeight: 700, fontSize: 18, color: 'var(--text)' }}>设置</span>
           <button onClick={onClose} className="btn-close">×</button>
         </div>
-
-        {/* Desktop-only backend control */}
-        <DesktopBackendSection
-          onApplyBackendUrl={(url, pwd) => {
-            setDraftServerUrl(url)
-            setDraftPassword(pwd)
-            try {
-              localStorage.setItem('pi-server-url', url)
-              localStorage.setItem('pi-server-password', pwd)
-            } catch { /* ignore */ }
-            onServerUrlChange(url)
-            onPasswordChange(pwd)
-          }}
-        />
-
-        {/* Desktop-only updater */}
-        <UpdaterCard />
 
         {/* Server Connection */}
         <div style={{ marginBottom: 24 }}>
@@ -285,34 +241,16 @@ export function SettingsPanel({ isDark, onThemeChange, fontSize, onFontSizeChang
             </div>
             <div>
               <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 6 }}>本地增强服务地址</div>
-              {isDesktop ? (
-                <div
-                  style={{
-                    padding: '10px 12px',
-                    borderRadius: 'var(--radius-lg)',
-                    border: '1px dashed var(--border)',
-                    background: 'var(--bg-hover)',
-                    color: 'var(--text-dim)',
-                    fontSize: 12,
-                    lineHeight: 1.5,
-                  }}
-                >
-                  桌面客户端已内置本地增强服务（Skills 扫描、打开文件夹），无需单独运行 helper 进程。
-                </div>
-              ) : (
-                <>
-                  <input
-                    type="text"
-                    value={draftLocalHelperUrl}
-                    onChange={(e) => setDraftLocalHelperUrl(e.target.value)}
-                    placeholder="http://127.0.0.1:30143"
-                    className="input-field"
-                  />
-                  <div style={{ marginTop: 6, fontSize: 12, color: 'var(--text-dim)', lineHeight: 1.4 }}>
-                    用于读取本地 Skills、Artifacts 等 super-king 文档未定义的增强能力
-                  </div>
-                </>
-              )}
+              <input
+                type="text"
+                value={draftLocalHelperUrl}
+                onChange={(e) => setDraftLocalHelperUrl(e.target.value)}
+                placeholder="http://127.0.0.1:30143"
+                className="input-field"
+              />
+              <div style={{ marginTop: 6, fontSize: 12, color: 'var(--text-dim)', lineHeight: 1.4 }}>
+                用于读取本地 Skills、Artifacts 等 super-king 文档未定义的增强能力
+              </div>
             </div>
           </div>
         </div>

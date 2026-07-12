@@ -5,7 +5,6 @@ import type { SessionInfo } from './mockData'
 import { ChatInput, type ChatInputHandle } from './components/ChatInput'
 import { SettingsPanel } from './components/SettingsPanel'
 import { SkillsPanel } from './components/SkillsPanel'
-import { SuperKingBadge } from './components/SuperKingBadge'
 import { Typewriter } from './components/Typewriter'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import {
@@ -15,17 +14,8 @@ import {
   type ConfigInfo,
 } from './lib/piApi'
 import { upsertSession } from './lib/sessionState'
-import { isDesktop, getDesktopBridge } from './lib/desktopBridge'
 
-// Electron 打包后没有 vite 代理，/superking-api 这种相对路径会解析成 file:///superking-api 而失败。
-// 必须用绝对地址 http://127.0.0.1:<port> 直连本机的 super-king 进程。
 function pickDefaultServerUrl(): string {
-  if (isDesktop) {
-    // 打包模式：默认走 30142（与 electron-store 默认 port 保持一致）。
-    // 真正的 port 会在挂载后通过 superking.status() 异步纠正。
-    return 'http://127.0.0.1:30142'
-  }
-  // 浏览器/dev：走 vite 代理
   return '/superking-api'
 }
 
@@ -69,14 +59,6 @@ export default function App() {
     listLocalSkills().catch(() => {})
   }, [])
 
-  // 托盘菜单 "设置..." -> 打开设置面板
-  useEffect(() => {
-    const bridge = typeof window !== 'undefined' ? window.piDesktop : undefined
-    if (!bridge) return
-    const unsub = bridge.events.onOpenSettings(() => setSettingsOpen(true))
-    return () => { unsub() }
-  }, [])
-
   const [newSessionCwd, setNewSessionCwd] = useState<string | null>(null)
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [isDark, setIsDark] = useState(() => {
@@ -103,18 +85,6 @@ export default function App() {
     try {
       const saved = localStorage.getItem('pi-server-url')
       const fallback = pickDefaultServerUrl()
-      // dev 模式残留旧地址清理：如果当前在 vite dev server 上但 localStorage 里存的是 127.0.0.1:30142，
-      // 修正回 /superking-api 走代理。
-      if (saved && typeof window !== 'undefined' && window.location.host === 'localhost:5173' && /^https?:\/\/(127\.0\.0\.1|localhost):30142\/?$/.test(saved.trim())) {
-        localStorage.setItem('pi-server-url', '/superking-api')
-        return '/superking-api'
-      }
-      // Electron 打包模式：如果之前残留 '/superking-api'（相对路径在 file:// 下用不了），
-      // 强制改为绝对地址。
-      if (isDesktop && saved === '/superking-api') {
-        localStorage.setItem('pi-server-url', fallback)
-        return fallback
-      }
       return saved || (import.meta.env.VITE_PI_API_BASE as string | undefined) || fallback
     } catch { return pickDefaultServerUrl() }
   })
@@ -162,50 +132,6 @@ export default function App() {
     localStorage.setItem('pi-server-url', serverUrl)
   }, [serverUrl])
 
-  // Electron 模式：监听 super-king 状态变化，端口变了就纠正 serverUrl，
-  // 同时第一次启动时也用 status().port 对齐一次。
-  useEffect(() => {
-    if (!isDesktop) return
-    const bridge = getDesktopBridge()
-    if (!bridge) return
-    const align = (port: number) => {
-      const target = `http://127.0.0.1:${port}`
-      setServerUrl(prev => {
-        // 用户自己配的远程地址（不是 127.0.0.1/localhost）就不要覆盖
-        if (prev && !/^https?:\/\/(127\.0\.0\.1|localhost)(:\d+)?\/?$/.test(prev.trim()) && prev !== '/superking-api') {
-          return prev
-        }
-        return prev === target ? prev : target
-      })
-    }
-    bridge.superking.status().then(s => align(s.port)).catch(() => {})
-    const off = bridge.superking.onStatusChange(s => align(s.port))
-    return () => { off() }
-  }, [])
-
-  // Electron 模式：启动时从 electron-store 拉取持久化的密码 / URL，
-  // electron-store 是 Electron 模式下的权威数据源（localStorage 只是 renderer 缓存）。
-  // 新用户开箱即用：electron-store defaults 有 superKingPassword=123456 + port=30142，
-  // 与外部 super-king 默认配置一致，直接能连上。
-  useEffect(() => {
-    if (!isDesktop) return
-    const bridge = getDesktopBridge()
-    if (!bridge) return
-    bridge.settings.get().then(s => {
-      // 密码：electron-store 有值就用它覆盖（确保跨版本/重装持久化的密码立即生效）
-      if (s.superKingPassword) {
-        setPassword(prev => (prev === s.superKingPassword ? prev : s.superKingPassword))
-      }
-      // URL：远程模式用 remoteUrl，本地模式用 127.0.0.1:port
-      const target = s.useRemote && s.remoteUrl
-        ? s.remoteUrl
-        : `http://127.0.0.1:${s.superKingPort}`
-      setServerUrl(prev => (prev === target ? prev : target))
-    }).catch(err => {
-      console.warn('[settings hydration] failed to read electron-store:', err)
-    })
-  }, [])
-
   useEffect(() => {
     localStorage.setItem('pi-server-password', password)
   }, [password])
@@ -214,31 +140,9 @@ export default function App() {
     localStorage.setItem('pi-local-helper-url', localHelperUrl)
   }, [localHelperUrl])
 
-  // 启动时从 electron-store 同步 autoApproveAllTools（权威数据源），覆盖 localStorage 兜底值
-  useEffect(() => {
-    if (!isDesktop) return
-    const bridge = getDesktopBridge()
-    if (!bridge) return
-    bridge.settings.get().then((s) => {
-      const v = !!s?.autoApproveAllTools
-      setAutoApproveAllToolsState(v)
-      try { localStorage.setItem('pi-auto-approve-all-tools', v ? '1' : '0') } catch {}
-    }).catch((err) => {
-      console.warn('[autoApprove] failed to load from electron-store:', err)
-    })
-  }, [])
-
   const setAutoApproveAllTools = useCallback((v: boolean) => {
     setAutoApproveAllToolsState(v)
     try { localStorage.setItem('pi-auto-approve-all-tools', v ? '1' : '0') } catch {}
-    if (isDesktop) {
-      const bridge = getDesktopBridge()
-      if (bridge?.settings?.set) {
-        bridge.settings.set({ autoApproveAllTools: v }).catch((err) => {
-          console.warn('[autoApprove] failed to persist to electron-store:', err)
-        })
-      }
-    }
   }, [])
 
   // 加载模型列表与全局配置
@@ -500,9 +404,6 @@ export default function App() {
               )}
             </button>
             <div style={{ flex: 1 }} />
-            <div style={{ marginRight: 8 }}>
-              <SuperKingBadge onOpenSettings={() => setSettingsOpen(true)} />
-            </div>
             <button
               onClick={() => setSettingsOpen(!settingsOpen)}
               title="设置"

@@ -127,14 +127,7 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   private openLogFolder = async () => {
-    try {
-      const bridge = (window as { piDesktop?: { log?: { revealRendererErrors?: () => Promise<unknown> } } }).piDesktop
-      if (bridge?.log?.revealRendererErrors) {
-        await bridge.log.revealRendererErrors()
-      }
-    } catch (err) {
-      console.warn('[ErrorBoundary] open log folder failed', err)
-    }
+    console.warn('[ErrorBoundary] Log folder not available in web mode')
   }
 
   render() {
