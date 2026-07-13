@@ -408,8 +408,17 @@ const CodeBlock = memo(function CodeBlock({ code, lang }: { code: string; lang: 
 
   return (
     <div
+      className="code-block-wrapper"
+      onMouseMove={(e) => {
+        const rect = e.currentTarget.getBoundingClientRect()
+        e.currentTarget.style.setProperty('--mouse-x', `${e.clientX - rect.left}px`)
+        e.currentTarget.style.setProperty('--mouse-y', `${e.clientY - rect.top}px`)
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.removeProperty('--mouse-x')
+        e.currentTarget.style.removeProperty('--mouse-y')
+      }}
       style={{
-        position: 'relative',
         marginTop: 8,
         marginBottom: 8,
         borderRadius: 'var(--radius-lg)',

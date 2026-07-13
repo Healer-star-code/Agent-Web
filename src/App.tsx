@@ -2,10 +2,10 @@ import { useState, useCallback, useRef, useEffect } from 'react'
 import { Sidebar } from './components/Sidebar'
 import { ChatArea } from './components/ChatArea'
 import type { SessionInfo } from './mockData'
-import { ChatInput, type ChatInputHandle } from './components/ChatInput'
 import { SettingsPanel } from './components/SettingsPanel'
-import { Typewriter } from './components/Typewriter'
 import { ErrorBoundary } from './components/ErrorBoundary'
+import { WelcomeScreen } from './components/WelcomeScreen'
+import type { ChatInputHandle } from './components/ChatInput'
 import {
   listSessions, deleteSession, renameSession, getStoredServerUrl, setStoredServerUrl,
 } from './lib/piApi'
@@ -16,26 +16,6 @@ function pickDefaultServerUrl(): string {
 }
 
 const APP_INSTITUTION = (import.meta.env.VITE_APP_INSTITUTION as string | undefined) ?? `v${__APP_VERSION__}`
-
-const TYPEWRITER_PHRASES = [
-  '准备好了吗？',
-  '有什么想问的？',
-  '一起来做点酷的事。',
-  '探索你的代码库。',
-  '起草一份教案。',
-  '总结这篇论文。',
-  '规划你的课程。',
-  '用简单的话解释一下。',
-  '和我结对编程。',
-  '修复那个烦人的 bug。',
-  '翻译成中文。',
-  '写一首俳句。',
-  '头脑风暴一下。',
-  '帮我审查代码。',
-  '发布上线！',
-  '让它更好看。',
-  '和我一起理清思路。',
-]
 
 export default function App() {
   const [sessions, setSessions] = useState<SessionInfo[]>([])
@@ -314,42 +294,11 @@ export default function App() {
                 onSessionCreated={handleSessionCreated}
               />
             ) : (
-              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', height: '100%', background: 'var(--bg)', overflow: 'hidden' }}>
-                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', overflowY: 'auto', padding: '20px 16px' }}>
-                  <div style={{ width: '100%', maxWidth: 820, transform: 'translateY(-30px)' }}>
-                    <div style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      gap: 12,
-                      marginLeft: 16,
-                      marginRight: 52,
-                      marginBottom: 16,
-                      fontFamily: 'var(--font-mono)',
-                    }}>
-                      <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, minWidth: 0, flex: 1, lineHeight: 1.2 }}>
-                        <span style={{ fontSize: 'var(--font-display)', fontWeight: 800, letterSpacing: '-0.04em', color: 'var(--text)' }}>超级小金</span>
-                        <span style={{ fontSize: 'var(--font-base)', minWidth: 0, overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>
-                          <Typewriter phrases={TYPEWRITER_PHRASES} />
-                        </span>
-                      </div>
-                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2, flexShrink: 0 }}>
-                        <span style={{ fontSize: 'var(--font-xs)', color: 'var(--text-muted)' }}>
-                          超级小金
-                        </span>
-                        <span style={{ fontSize: 'var(--font-xs)', color: 'var(--text-muted)' }}>
-                          {APP_INSTITUTION}
-                        </span>
-                      </div>
-                    </div>
-                    <ChatInput
-                      ref={chatInputRef}
-                      placeholder="开始对话..."
-                      onSend={() => setToast({ message: '请先从左侧新建或选择会话', type: 'error' })}
-                    />
-                  </div>
-                </div>
-              </div>
+              <WelcomeScreen
+                chatInputRef={chatInputRef}
+                onSend={() => setToast({ message: '请先从左侧新建或选择会话', type: 'error' })}
+                institution={APP_INSTITUTION}
+              />
             )}
           </div>
         </div>

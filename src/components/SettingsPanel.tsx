@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { motion } from 'framer-motion'
 import { testConnection, setStoredServerUrl } from '../lib/piApi'
 
 interface Props {
@@ -69,25 +70,41 @@ export function SettingsPanel({ isDark, onThemeChange, fontSize, onFontSizeChang
   }
 
   return (
-    <div onClick={() => {
-      saveAndClose()
-    }} style={{
-      position: 'fixed', inset: 0, zIndex: 'var(--z-modal-backdrop)',
-      background: 'var(--overlay-bg)',
-      backdropFilter: 'blur(4px)',
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-      animation: 'fadeIn 0.15s ease',
-    }}>
-      <div onClick={(e) => e.stopPropagation()} style={{
-        width: 460, maxWidth: '90vw',
-        background: 'var(--bg-panel)', border: '1px solid var(--border)',
-        borderRadius: 'var(--radius-xl)', boxShadow: 'var(--shadow-xl)',
-        position: 'relative',
-        overflow: 'hidden',
-        padding: '24px 28px 20px',
-        animation: 'fadeIn 0.2s ease',
-        maxHeight: '90vh', overflowY: 'auto',
-      }}>
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.15 }}
+      onClick={() => {
+        saveAndClose()
+      }}
+      style={{
+        position: 'fixed', inset: 0, zIndex: 'var(--z-modal-backdrop)',
+        background: 'var(--overlay-bg)',
+        backdropFilter: 'blur(8px)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+      }}
+    >
+      <motion.div
+        initial={{ opacity: 0, y: 12, scale: 0.98 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        exit={{ opacity: 0, y: 12, scale: 0.98 }}
+        transition={{ type: 'spring', stiffness: 300, damping: 25 }}
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          width: 460, maxWidth: '90vw',
+          background: 'color-mix(in srgb, var(--bg-panel) 92%, transparent)',
+          border: '1px solid color-mix(in srgb, var(--border) 70%, rgba(255,255,255,0.1))',
+          borderRadius: 'var(--radius-xl)',
+          boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.1), var(--shadow-xl)',
+          position: 'relative',
+          overflow: 'hidden',
+          padding: '24px 28px 20px',
+          maxHeight: '90vh', overflowY: 'auto',
+          backdropFilter: 'blur(16px) saturate(180%)',
+          WebkitBackdropFilter: 'blur(16px) saturate(180%)',
+        }}
+      >
         {/* Header */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
           <span style={{ fontWeight: 700, fontSize: 18, color: 'var(--text)' }}>设置</span>
@@ -295,7 +312,7 @@ export function SettingsPanel({ isDark, onThemeChange, fontSize, onFontSizeChang
         <button onClick={saveAndClose} className={`btn-save ${draftMode === 'senior' ? 'senior' : ''}`}>
           保存并连接
         </button>
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
   )
 }

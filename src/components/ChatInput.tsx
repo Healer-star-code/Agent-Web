@@ -1,6 +1,7 @@
 import { useRef, useState, useCallback, forwardRef, useImperativeHandle, useEffect, type KeyboardEvent, type DragEvent, type ClipboardEvent } from 'react'
 import type { LocalAttachment, MessageAttachment } from '../mockData'
 import { AttachmentCard } from './FileCard'
+import { MagneticButton } from './MagneticButton'
 
 // 视频不允许上传：super-king 没有视频处理能力，agent 也看不了视频
 const BLOCKED_EXT = ['mp4', 'mov', 'avi', 'mkv', 'webm', 'flv', 'wmv', 'm4v', '3gp']
@@ -767,7 +768,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
               </button>
             </>
           ) : (
-            <button
+            <MagneticButton
               onClick={handleSend}
               className="btn-primary"
               style={{ alignSelf: 'flex-end', flexShrink: 0 }}
@@ -777,7 +778,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 <polyline points="7.5 3 12 7 7.5 11" />
               </svg>
               发送
-            </button>
+            </MagneticButton>
           )}
           </div>
         </div>

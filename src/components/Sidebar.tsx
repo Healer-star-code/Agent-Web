@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useMemo } from 'react'
 import type { ReactNode } from 'react'
+import { motion } from 'framer-motion'
 import { Plus, ChatCircle, PuzzlePiece, FileText, FilePdf, PresentationChart, Table, Wrench } from '@phosphor-icons/react'
 import type { SessionInfo } from '../mockData'
 import { getMessages } from '../lib/piApi'
@@ -231,10 +232,10 @@ export function Sidebar({ sessions, selectedId, onSelectSession, onNewSession, s
             <div style={{ padding: '12px 10px', display: 'flex', flexDirection: 'column', gap: 8 }}>
               {[...Array(5)].map((_, i) => (
                 <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px' }}>
-                  <div style={{ width: 22, height: 22, borderRadius: 'var(--radius-sm)', background: 'var(--bg-hover)', animation: 'shimmer 1.5s ease-in-out infinite' }} />
+                  <div className="skeleton-shimmer" style={{ width: 22, height: 22, borderRadius: 'var(--radius-sm)', animationDelay: `${i * 80}ms` }} />
                   <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 4 }}>
-                    <div style={{ width: '60%', height: 10, borderRadius: 'var(--radius-xs)', background: 'var(--bg-hover)', animation: 'shimmer 1.5s ease-in-out infinite', animationDelay: `${i * 80}ms` }} />
-                    <div style={{ width: '40%', height: 8, borderRadius: 'var(--radius-xs)', background: 'var(--bg-hover)', animation: 'shimmer 1.5s ease-in-out infinite', animationDelay: `${i * 80 + 40}ms` }} />
+                    <div className="skeleton-shimmer" style={{ width: '60%', height: 10, borderRadius: 'var(--radius-xs)', animationDelay: `${i * 80}ms` }} />
+                    <div className="skeleton-shimmer" style={{ width: '40%', height: 8, borderRadius: 'var(--radius-xs)', animationDelay: `${i * 80 + 40}ms` }} />
                   </div>
                 </div>
               ))}
@@ -440,7 +441,7 @@ export function Sidebar({ sessions, selectedId, onSelectSession, onNewSession, s
               }
             : {}
           return (
-            <div
+            <motion.div
               key={item.id}
               onClick={() => {
                 if (item.id === 'new') {
@@ -463,10 +464,13 @@ export function Sidebar({ sessions, selectedId, onSelectSession, onNewSession, s
                 }
               }}
               style={{ ...baseStyle, ...activeStyle }}
+              whileHover={{ x: 2 }}
+              whileTap={{ scale: 0.98 }}
+              transition={{ type: 'spring', stiffness: 300, damping: 25 }}
             >
               <span style={{ width: 20, height: 20, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{item.icon}</span>
               <span>{item.label}</span>
-            </div>
+            </motion.div>
           )
         })}
       </div>
@@ -498,7 +502,7 @@ function SkillCard({ skill }: { skill: SkillDef }) {
     }
   }, [skill.id])
   return (
-    <div
+    <motion.div
       style={{
         display: 'flex',
         alignItems: 'center',
@@ -509,6 +513,9 @@ function SkillCard({ skill }: { skill: SkillDef }) {
         cursor: 'pointer',
       }}
       onClick={() => setEnabled((v) => !v)}
+      whileHover={{ y: -2, boxShadow: 'var(--shadow-md)' }}
+      whileTap={{ scale: 0.98 }}
+      transition={{ type: 'spring', stiffness: 300, damping: 25 }}
     >
       <span style={{ display: 'inline-flex', color: 'var(--accent)', flexShrink: 0 }}>{skillIcon}</span>
       <div style={{ flex: 1, minWidth: 0 }}>
@@ -539,7 +546,7 @@ function SkillCard({ skill }: { skill: SkillDef }) {
           }}
         />
       </div>
-    </div>
+    </motion.div>
   )
 }
 
@@ -862,7 +869,7 @@ function SessionItem({ session, isSelected, onClick, onDelete, onRename, onPin, 
   ].filter(Boolean).join('\n')
 
   return (
-    <div
+    <motion.div
       onClick={onClick}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => { setHovered(false); if (!menuOpen) setConfirming(false) }}
@@ -882,6 +889,9 @@ function SessionItem({ session, isSelected, onClick, onDelete, onRename, onPin, 
         overflow: 'hidden',
       }}
       title={detailTitle}
+      whileHover={{ x: 2 }}
+      whileTap={{ scale: 0.99 }}
+      transition={{ type: 'spring', stiffness: 300, damping: 25 }}
     >
       {depth > 0 && (
         <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="var(--text-dim)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
@@ -1082,7 +1092,7 @@ function SessionItem({ session, isSelected, onClick, onDelete, onRename, onPin, 
           </svg>
         </button>
       )}
-    </div>
+    </motion.div>
   )
 }
 

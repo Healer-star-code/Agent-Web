@@ -1,3 +1,7 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
 :root {
   --bg: #ffffff;
   --bg-panel: #f7f7f8;
@@ -139,7 +143,7 @@ html.senior-mode * {
 
 /* But keep essential transitions */
 html.senior-mode .thinking-shimmer {
-  animation: shimmer 2s ease-in-out infinite !important;
+  animation: shimmer-pulse 2s ease-in-out infinite !important;
 }
 
 /* Senior mode: larger markdown body text */
@@ -820,14 +824,29 @@ pre, code { font-family: var(--font-mono); }
   to   { opacity: 1; transform: translateY(0); }
 }
 
-@keyframes shimmer {
-  0%   { opacity: 0.5; }
+@keyframes shimmer-pulse {
+  0%, 100% { opacity: 0.5; }
   50%  { opacity: 1; }
-  100% { opacity: 0.5; }
+}
+
+@keyframes shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.skeleton-shimmer {
+  background: linear-gradient(
+    90deg,
+    var(--bg-hover) 0%,
+    color-mix(in srgb, var(--bg-hover) 60%, var(--bg-selected)) 50%,
+    var(--bg-hover) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 2s cubic-bezier(0.16, 1, 0.3, 1) infinite;
 }
 
 .thinking-shimmer {
-  animation: shimmer 1.5s ease-in-out infinite;
+  animation: shimmer-pulse 1.5s ease-in-out infinite;
 }
 
 /* Subtle noise texture overlay for depth (very conservative default) */
@@ -1016,3 +1035,34 @@ html.senior-mode .chat-input-wrapper.is-streaming .chat-input-inner {
 .xiaojin-logo .xiaojin-dark  { display: none; }
 html.dark .xiaojin-logo .xiaojin-light { display: none; }
 html.dark .xiaojin-logo .xiaojin-dark  { display: block; }
+
+/* Spotlight border for code blocks */
+.code-block-wrapper {
+  position: relative;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+.code-block-wrapper::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: var(--radius-lg);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  background: radial-gradient(
+    400px circle at var(--mouse-x, 50%) var(--mouse-y, 50%),
+    color-mix(in srgb, var(--accent) 35%, transparent),
+    transparent 60%
+  );
+  z-index: 2;
+  border: 1px solid transparent;
+  mask: linear-gradient(#fff 0 0) padding-box, linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+  -webkit-mask-composite: xor;
+}
+
+.code-block-wrapper:hover::before {
+  opacity: 1;
+}
