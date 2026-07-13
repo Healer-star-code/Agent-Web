@@ -1,4 +1,6 @@
 import { useState, useRef, useEffect, useMemo } from 'react'
+import type { ReactNode } from 'react'
+import { Plus, ChatCircle, PuzzlePiece, FileText, FilePdf, PresentationChart, Table, Wrench } from '@phosphor-icons/react'
 import type { SessionInfo } from '../mockData'
 import { getMessages } from '../lib/piApi'
 import type { WebMessage } from '../lib/piApi'
@@ -107,7 +109,7 @@ type NavId = 'chat' | 'skills' | 'new'
 
 interface NavItemDef {
   id: NavId | 'new'
-  icon: string
+  icon: ReactNode
   label: string
   action?: () => void
 }
@@ -175,9 +177,9 @@ export function Sidebar({ sessions, selectedId, onSelectSession, onNewSession, s
   const sessionTree = useMemo(() => buildSessionTree(filteredSessions, pinnedIds), [filteredSessions, pinnedIds])
 
   const navItems: NavItemDef[] = [
-    { id: 'new', icon: '➕', label: '新建对话' },
-    { id: 'chat', icon: '💬', label: '历史对话' },
-    { id: 'skills', icon: '🧩', label: '技能库' },
+    { id: 'new', icon: <Plus weight="bold" size={18} />, label: '新建对话' },
+    { id: 'chat', icon: <ChatCircle weight="bold" size={18} />, label: '历史对话' },
+    { id: 'skills', icon: <PuzzlePiece weight="bold" size={18} />, label: '技能库' },
   ]
 
   const sessionListSection = (
@@ -462,7 +464,7 @@ export function Sidebar({ sessions, selectedId, onSelectSession, onNewSession, s
               }}
               style={{ ...baseStyle, ...activeStyle }}
             >
-              <span style={{ width: 20, textAlign: 'center', flexShrink: 0 }}>{item.icon}</span>
+              <span style={{ width: 20, height: 20, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{item.icon}</span>
               <span>{item.label}</span>
             </div>
           )
@@ -485,6 +487,16 @@ export function Sidebar({ sessions, selectedId, onSelectSession, onNewSession, s
 
 function SkillCard({ skill }: { skill: SkillDef }) {
   const [enabled, setEnabled] = useState(false)
+  const skillIcon = useMemo(() => {
+    switch (skill.id) {
+      case 'docx': return <FileText weight="duotone" size={20} />
+      case 'pdf': return <FilePdf weight="duotone" size={20} />
+      case 'pptx': return <PresentationChart weight="duotone" size={20} />
+      case 'xlsx': return <Table weight="duotone" size={20} />
+      case 'skill-creator': return <Wrench weight="duotone" size={20} />
+      default: return <PuzzlePiece weight="duotone" size={20} />
+    }
+  }, [skill.id])
   return (
     <div
       style={{
@@ -498,7 +510,7 @@ function SkillCard({ skill }: { skill: SkillDef }) {
       }}
       onClick={() => setEnabled((v) => !v)}
     >
-      <span style={{ fontSize: 16, flexShrink: 0 }}>🧩</span>
+      <span style={{ display: 'inline-flex', color: 'var(--accent)', flexShrink: 0 }}>{skillIcon}</span>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: 'var(--font-sm)', fontWeight: 500, color: 'var(--text)' }}>{skill.name}</div>
         <div style={{ fontSize: 'var(--font-xs)', color: 'var(--text-muted)', marginTop: 2 }}>{skill.desc}</div>
@@ -986,7 +998,7 @@ function SessionItem({ session, isSelected, onClick, onDelete, onRename, onPin, 
               position: 'fixed',
               top: menuPos.top,
               left: menuPos.left,
-              zIndex: 1000,
+              zIndex: 'var(--z-dropdown)',
               minWidth: 140,
               background: 'var(--bg-panel)',
               border: '1px solid var(--border)',
@@ -1279,14 +1291,26 @@ function getAvatarInitial(name: string): string {
   return trimmed.charAt(0).toUpperCase()
 }
 
+function nameToHue(name: string): number {
+  let hash = 0
+  for (let i = 0; i < name.length; i++) {
+    hash = name.charCodeAt(i) + ((hash << 5) - hash)
+  }
+  return Math.abs(hash % 360)
+}
+
 function Avatar({ name, size = 32 }: { name: string; size?: number }) {
+  const initial = getAvatarInitial(name)
+  const hasName = name.trim().length > 0
+  const hue = hasName ? nameToHue(name) : 215
+  const bg = hasName ? `hsl(${hue} 65% 45%)` : 'var(--text-muted)'
   return (
     <div
       style={{
         width: size,
         height: size,
         borderRadius: '50%',
-        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+        background: bg,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -1294,9 +1318,10 @@ function Avatar({ name, size = 32 }: { name: string; size?: number }) {
         fontSize: size < 36 ? 13 : 15,
         fontWeight: 600,
         flexShrink: 0,
+        boxShadow: `inset 0 1px 0 rgba(255,255,255,0.15), 0 0 0 1px hsl(${hue} 50% 30% / 0.25)`,
       }}
     >
-      {getAvatarInitial(name)}
+      {initial}
     </div>
   )
 }
@@ -1394,7 +1419,7 @@ function UserProfileBar({
             borderRadius: 'var(--radius-md)',
             boxShadow: '0 12px 40px rgba(0,0,0,0.12)',
             overflow: 'hidden',
-            zIndex: 200,
+            zIndex: 'var(--z-dropdown)',
           }}
         >
           <div style={{ padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12, borderBottom: '1px solid var(--border)' }}>
@@ -1500,7 +1525,7 @@ function UserProfileEditDialog({
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        zIndex: 300,
+        zIndex: 'var(--z-modal)',
       }}
     >
       <div

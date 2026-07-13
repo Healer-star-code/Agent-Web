@@ -72,7 +72,7 @@ export function SettingsPanel({ isDark, onThemeChange, fontSize, onFontSizeChang
     <div onClick={() => {
       saveAndClose()
     }} style={{
-      position: 'fixed', inset: 0, zIndex: 299,
+      position: 'fixed', inset: 0, zIndex: 'var(--z-modal-backdrop)',
       background: 'var(--overlay-bg)',
       backdropFilter: 'blur(4px)',
       display: 'flex', alignItems: 'center', justifyContent: 'center',

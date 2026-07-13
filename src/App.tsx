@@ -373,7 +373,7 @@ export default function App() {
           padding: '10px 20px', borderRadius: 'var(--radius-lg)',
           background: toast.type === 'success' ? 'var(--success)' : 'var(--danger)', color: '#fff',
           fontSize: 'calc(var(--font-base) * 0.929)', fontWeight: 600, boxShadow: 'var(--shadow-lg)',
-          zIndex: 999, transition: 'opacity 0.3s',
+          zIndex: 'var(--z-toast)', transition: 'opacity 0.3s',
         }}>
           {toast.message}
         </div>
