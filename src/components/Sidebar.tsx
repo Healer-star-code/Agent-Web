@@ -4,6 +4,14 @@ import { getMessages } from '../lib/piApi'
 import type { WebMessage } from '../lib/piApi'
 import { XiaojinLogo } from './XiaojinLogo'
 
+interface UserProfile {
+  name: string
+  email: string
+}
+
+const USER_PROFILE_KEY = 'pi-user-profile-v1'
+const MAX_USERNAME_LEN = 10
+
 interface Props {
   sessions: SessionInfo[]
   selectedId: string | null
@@ -123,6 +131,20 @@ export function Sidebar({ sessions, selectedId, onSelectSession, onNewSession, s
   const [sessionsCollapsed, setSessionsCollapsed] = useState(false)
   const [skillsCollapsed, setSkillsCollapsed] = useState(false)
   const [search, setSearch] = useState('')
+  const [userProfile, setUserProfile] = useState<UserProfile>(() => {
+    try {
+      const raw = localStorage.getItem(USER_PROFILE_KEY)
+      if (raw) {
+        const parsed = JSON.parse(raw) as UserProfile
+        if (parsed.name && typeof parsed.name === 'string') {
+          return { name: parsed.name.slice(0, MAX_USERNAME_LEN), email: String(parsed.email ?? '') }
+        }
+      }
+    } catch { /* ignore */ }
+    return { name: '', email: '' }
+  })
+  const [userMenuOpen, setUserMenuOpen] = useState(false)
+  const [editingProfile, setEditingProfile] = useState(false)
   const searchRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -130,6 +152,12 @@ export function Sidebar({ sessions, selectedId, onSelectSession, onNewSession, s
       setActiveNav('chat')
     }
   }, [selectedId, activeNav])
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(USER_PROFILE_KEY, JSON.stringify(userProfile))
+    } catch { /* ignore */ }
+  }, [userProfile])
 
   const filteredSessions = useMemo(() => {
     let list = sessions
@@ -379,7 +407,7 @@ export function Sidebar({ sessions, selectedId, onSelectSession, onNewSession, s
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden', position: 'relative' }}>
       <div style={{ padding: '12px 10px 10px', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
         <PiAgentTitle />
       </div>
@@ -429,6 +457,15 @@ export function Sidebar({ sessions, selectedId, onSelectSession, onNewSession, s
       </div>
 
       {renderContent()}
+
+      <UserProfileBar
+        profile={userProfile}
+        onProfileChange={setUserProfile}
+        menuOpen={userMenuOpen}
+        onMenuOpenChange={setUserMenuOpen}
+        editing={editingProfile}
+        onEditingChange={setEditingProfile}
+      />
     </div>
   )
 }
@@ -1221,4 +1258,322 @@ const menuItemStyle: React.CSSProperties = {
   fontSize: 'var(--font-sm)', textAlign: 'left' as const,
   fontFamily: 'inherit', fontWeight: 400,
   transition: 'background 0.08s',
+}
+
+function getAvatarInitial(name: string): string {
+  const trimmed = name.trim()
+  if (!trimmed) return '?'
+  return trimmed.charAt(0).toUpperCase()
+}
+
+function Avatar({ name, size = 32 }: { name: string; size?: number }) {
+  return (
+    <div
+      style={{
+        width: size,
+        height: size,
+        borderRadius: '50%',
+        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        color: '#fff',
+        fontSize: size < 36 ? 13 : 15,
+        fontWeight: 600,
+        flexShrink: 0,
+      }}
+    >
+      {getAvatarInitial(name)}
+    </div>
+  )
+}
+
+function UserProfileBar({
+  profile,
+  onProfileChange,
+  menuOpen,
+  onMenuOpenChange,
+  editing,
+  onEditingChange,
+}: {
+  profile: UserProfile
+  onProfileChange: (p: UserProfile) => void
+  menuOpen: boolean
+  onMenuOpenChange: (v: boolean) => void
+  editing: boolean
+  onEditingChange: (v: boolean) => void
+}) {
+  const isLoggedIn = profile.name.trim().length > 0
+  const displayName = isLoggedIn ? profile.name.slice(0, MAX_USERNAME_LEN) : '点击登录'
+  const statusText = isLoggedIn ? '已登录' : '未登录'
+  const menuRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      const target = e.target as Node
+      if (menuRef.current && !menuRef.current.contains(target)) {
+        onMenuOpenChange(false)
+      }
+    }
+    if (menuOpen) {
+      document.addEventListener('mousedown', handleClickOutside)
+      return () => document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [menuOpen, onMenuOpenChange])
+
+  return (
+    <>
+      <div
+        onClick={() => {
+          if (isLoggedIn) {
+            onMenuOpenChange(!menuOpen)
+          } else {
+            onEditingChange(true)
+          }
+        }}
+        style={{
+          padding: '10px 14px',
+          borderTop: '1px solid var(--border)',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 10,
+          cursor: 'pointer',
+          transition: 'background 0.15s',
+          flexShrink: 0,
+        }}
+        onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg-hover)' }}
+        onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
+      >
+        <Avatar name={profile.name} size={32} />
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 'var(--font-sm)', fontWeight: 600, color: 'var(--text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            {displayName}
+          </div>
+          <div style={{ fontSize: 'var(--font-xs)', color: 'var(--text-muted)', marginTop: 1 }}>{statusText}</div>
+        </div>
+        <svg
+          width="16"
+          height="16"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          style={{ color: 'var(--text-muted)', flexShrink: 0 }}
+        >
+          <circle cx="12" cy="12" r="1" />
+          <circle cx="19" cy="12" r="1" />
+          <circle cx="5" cy="12" r="1" />
+        </svg>
+      </div>
+
+      {menuOpen && isLoggedIn && (
+        <div
+          ref={menuRef}
+          style={{
+            position: 'absolute',
+            bottom: 58,
+            left: 8,
+            width: 244,
+            background: 'var(--bg)',
+            border: '1px solid var(--border)',
+            borderRadius: 'var(--radius-md)',
+            boxShadow: '0 12px 40px rgba(0,0,0,0.12)',
+            overflow: 'hidden',
+            zIndex: 200,
+          }}
+        >
+          <div style={{ padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12, borderBottom: '1px solid var(--border)' }}>
+            <Avatar name={profile.name} size={40} />
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: 'var(--font-sm)', fontWeight: 600, color: 'var(--text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {profile.name.slice(0, MAX_USERNAME_LEN)}
+              </div>
+              <div style={{ fontSize: 'var(--font-xs)', color: 'var(--text-muted)', marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {profile.email || '无邮箱'}
+              </div>
+            </div>
+          </div>
+          <div style={{ padding: '6px 0' }}>
+            <button
+              onClick={() => { onMenuOpenChange(false); onEditingChange(true) }}
+              style={menuItemStyle}
+              onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg-hover)' }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = 'none' }}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                <circle cx="12" cy="7" r="4" />
+              </svg>
+              个人资料
+            </button>
+            <button
+              onClick={() => { onMenuOpenChange(false) }}
+              style={menuItemStyle}
+              onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg-hover)' }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = 'none' }}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="3" />
+                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.68 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+              </svg>
+              设置
+            </button>
+            <div style={{ height: 1, background: 'var(--border)', margin: '4px 6px' }} />
+            <button
+              onClick={() => { onMenuOpenChange(false); onProfileChange({ name: '', email: '' }) }}
+              style={{ ...menuItemStyle, color: '#ef4444' }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = '#fef2f2' }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = 'none' }}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                <polyline points="16 17 21 12 16 7" />
+                <line x1="21" y1="12" x2="9" y2="12" />
+              </svg>
+              退出登录
+            </button>
+          </div>
+        </div>
+      )}
+
+      {editing && (
+        <UserProfileEditDialog
+          profile={profile}
+          onSave={(p) => { onProfileChange(p); onEditingChange(false); onMenuOpenChange(false) }}
+          onCancel={() => onEditingChange(false)}
+        />
+      )}
+    </>
+  )
+}
+
+function UserProfileEditDialog({
+  profile,
+  onSave,
+  onCancel,
+}: {
+  profile: UserProfile
+  onSave: (p: UserProfile) => void
+  onCancel: () => void
+}) {
+  const [name, setName] = useState(profile.name.slice(0, MAX_USERNAME_LEN))
+  const [email, setEmail] = useState(profile.email)
+  const dialogRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    function handleKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') onCancel()
+    }
+    function handleClickOutside(e: MouseEvent) {
+      const target = e.target as Node
+      if (dialogRef.current && !dialogRef.current.contains(target)) onCancel()
+    }
+    document.addEventListener('keydown', handleKey)
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => {
+      document.removeEventListener('keydown', handleKey)
+      document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [onCancel])
+
+  return (
+    <div
+      style={{
+        position: 'fixed',
+        inset: 0,
+        background: 'rgba(0,0,0,0.35)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 300,
+      }}
+    >
+      <div
+        ref={dialogRef}
+        style={{
+          width: 320,
+          background: 'var(--bg)',
+          border: '1px solid var(--border)',
+          borderRadius: 'var(--radius-md)',
+          padding: 20,
+          boxShadow: '0 20px 60px rgba(0,0,0,0.2)',
+        }}
+      >
+        <div style={{ fontSize: 'var(--font-md)', fontWeight: 600, color: 'var(--text)', marginBottom: 16 }}>{profile.name ? '编辑个人资料' : '登录'}</div>
+        <div style={{ marginBottom: 14 }}>
+          <div style={{ fontSize: 'var(--font-xs)', color: 'var(--text-muted)', marginBottom: 6 }}>用户名（最多 {MAX_USERNAME_LEN} 字）</div>
+          <input
+            type="text"
+            value={name}
+            maxLength={MAX_USERNAME_LEN}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="请输入用户名"
+            style={{
+              width: '100%',
+              padding: '8px 10px',
+              background: 'var(--bg)',
+              border: '1px solid var(--border)',
+              borderRadius: 'var(--radius-sm)',
+              color: 'var(--text)',
+              fontSize: 'var(--font-sm)',
+              outline: 'none',
+            }}
+          />
+        </div>
+        <div style={{ marginBottom: 20 }}>
+          <div style={{ fontSize: 'var(--font-xs)', color: 'var(--text-muted)', marginBottom: 6 }}>邮箱</div>
+          <input
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="可选"
+            style={{
+              width: '100%',
+              padding: '8px 10px',
+              background: 'var(--bg)',
+              border: '1px solid var(--border)',
+              borderRadius: 'var(--radius-sm)',
+              color: 'var(--text)',
+              fontSize: 'var(--font-sm)',
+              outline: 'none',
+            }}
+          />
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+          <button
+            onClick={onCancel}
+            style={{
+              padding: '7px 14px',
+              borderRadius: 'var(--radius-sm)',
+              border: '1px solid var(--border)',
+              background: 'var(--bg)',
+              color: 'var(--text)',
+              fontSize: 'var(--font-sm)',
+              cursor: 'pointer',
+            }}
+          >取消</button>
+          <button
+            onClick={() => {
+              const trimmed = name.trim()
+              if (!trimmed) return
+              onSave({ name: trimmed.slice(0, MAX_USERNAME_LEN), email: email.trim() })
+            }}
+            disabled={!name.trim()}
+            style={{
+              padding: '7px 14px',
+              borderRadius: 'var(--radius-sm)',
+              border: 'none',
+              background: 'var(--accent)',
+              color: '#fff',
+              fontSize: 'var(--font-sm)',
+              cursor: name.trim() ? 'pointer' : 'not-allowed',
+              opacity: name.trim() ? 1 : 0.5,
+            }}
+          >保存</button>
+        </div>
+      </div>
+    </div>
+  )
 }
