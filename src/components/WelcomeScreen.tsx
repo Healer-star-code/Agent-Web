@@ -45,15 +45,14 @@ const visualContainer: Variants = {
   hidden: { opacity: 0 },
   visible: {
     opacity: 1,
-    transition: { staggerChildren: 0.12, delayChildren: 0.2 },
+    transition: { staggerChildren: 0.1, delayChildren: 0.2 },
   },
 }
 
 const visualItem: Variants = {
-  hidden: { opacity: 0, scale: 0.9, y: 20 },
+  hidden: { opacity: 0, y: 20 },
   visible: {
     opacity: 1,
-    scale: 1,
     y: 0,
     transition: { type: 'spring', stiffness: 120, damping: 18 },
   },
@@ -67,9 +66,13 @@ interface Props {
 
 export function WelcomeScreen({ chatInputRef, onSend, institution }: Props) {
   return (
-    <div className="min-h-full flex flex-col lg:flex-row items-center justify-center gap-12 lg:gap-16 px-6 py-12 lg:px-20 overflow-hidden bg-app-bg">
+    <div
+      className="min-h-full w-full flex flex-col lg:flex-row items-center justify-center gap-10 lg:gap-16 px-6 py-10 lg:px-20 overflow-hidden bg-app-bg"
+      style={{ display: 'flex', minHeight: '100%' }}
+    >
+      {/* Left: text + input */}
       <motion.div
-        className="flex-1 w-full max-w-2xl"
+        className="flex-1 w-full max-w-xl"
         variants={container}
         initial="hidden"
         animate="visible"
@@ -109,84 +112,56 @@ export function WelcomeScreen({ chatInputRef, onSend, institution }: Props) {
         )}
       </motion.div>
 
+      {/* Right: brand visual */}
       <motion.div
-        className="hidden lg:flex flex-1 w-full max-w-xl items-center justify-center"
+        className="flex-1 w-full max-w-lg hidden lg:flex flex-col items-center justify-center"
         variants={visualContainer}
         initial="hidden"
         animate="visible"
       >
-        <div className="relative w-full max-w-md aspect-square flex items-center justify-center">
-          {/* Background gradient blob */}
+        <div className="relative flex flex-col items-center w-full">
+          {/* Glow */}
           <motion.div
             variants={visualItem}
-            className="absolute inset-0 rounded-full opacity-60 blur-3xl"
+            className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-64 h-64 rounded-full opacity-50 blur-3xl"
             style={{
-              background: 'radial-gradient(circle at 40% 40%, color-mix(in srgb, var(--accent) 22%, transparent), transparent 60%)',
+              background: 'radial-gradient(circle, color-mix(in srgb, var(--accent) 25%, transparent), transparent 70%)',
             }}
-            animate={{ scale: [1, 1.08, 1], opacity: [0.5, 0.7, 0.5] }}
-            transition={{ duration: 8, repeat: Infinity, ease: 'easeInOut' }}
+            animate={{ scale: [1, 1.12, 1], opacity: [0.45, 0.65, 0.45] }}
+            transition={{ duration: 7, repeat: Infinity, ease: 'easeInOut' }}
           />
 
-          {/* Rotating ring */}
-          <motion.div
-            className="absolute w-[78%] h-[78%] rounded-full border border-app-border/40"
-            animate={{ rotate: 360 }}
-            transition={{ duration: 24, repeat: Infinity, ease: 'linear' }}
-          >
-            <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-2 h-2 rounded-full bg-accent/60" />
-            <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2 h-2 rounded-full bg-accent/40" />
-          </motion.div>
-
-          <motion.div
-            className="absolute w-[62%] h-[62%] rounded-full border border-dashed border-app-border/30"
-            animate={{ rotate: -360 }}
-            transition={{ duration: 32, repeat: Infinity, ease: 'linear' }}
-          />
-
-          {/* Floating logo */}
+          {/* Logo */}
           <motion.div
             variants={visualItem}
-            className="relative z-10"
+            className="relative z-10 mb-8"
             animate={{ y: [0, -10, 0] }}
             transition={{ duration: 5, repeat: Infinity, ease: 'easeInOut' }}
           >
-            <XiaojinLogo size={140} />
+            <XiaojinLogo size={160} />
           </motion.div>
 
-          {/* Floating capability cards */}
-          <motion.div
-            variants={visualItem}
-            className="absolute top-8 right-0 p-3 rounded-2xl bg-app-panel/80 border border-app-border/50 shadow-diffusion backdrop-blur-sm"
-          >
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-accent-bg flex items-center justify-center text-accent">
-                <BookOpen weight="duotone" size={18} />
+          {/* Feature cards */}
+          <motion.div variants={visualItem} className="grid grid-cols-3 gap-3 w-full max-w-md">
+            <div className="flex flex-col items-center gap-3 p-4 rounded-2xl bg-app-panel border border-app-border/50 shadow-diffusion">
+              <div className="w-10 h-10 rounded-xl bg-accent-bg flex items-center justify-center text-accent">
+                <BookOpen weight="duotone" size={22} />
               </div>
-              <div className="text-xs font-medium text-text">智能备课</div>
+              <div className="text-xs font-semibold text-text text-center">智能备课</div>
             </div>
-          </motion.div>
 
-          <motion.div
-            variants={visualItem}
-            className="absolute bottom-16 left-0 p-3 rounded-2xl bg-app-panel/80 border border-app-border/50 shadow-diffusion backdrop-blur-sm"
-          >
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-[var(--accent-senior-bg)] flex items-center justify-center text-[var(--accent-senior)]">
-                <FileText weight="duotone" size={18} />
+            <div className="flex flex-col items-center gap-3 p-4 rounded-2xl bg-app-panel border border-app-border/50 shadow-diffusion">
+              <div className="w-10 h-10 rounded-xl bg-[var(--accent-senior-bg)] flex items-center justify-center text-[var(--accent-senior)]">
+                <FileText weight="duotone" size={22} />
               </div>
-              <div className="text-xs font-medium text-text">文档处理</div>
+              <div className="text-xs font-semibold text-text text-center">文档处理</div>
             </div>
-          </motion.div>
 
-          <motion.div
-            variants={visualItem}
-            className="absolute bottom-4 right-8 p-3 rounded-2xl bg-app-panel/80 border border-app-border/50 shadow-diffusion backdrop-blur-sm"
-          >
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-[var(--warning-bg)] flex items-center justify-center text-[var(--warning)]">
-                <Code weight="duotone" size={18} />
+            <div className="flex flex-col items-center gap-3 p-4 rounded-2xl bg-app-panel border border-app-border/50 shadow-diffusion">
+              <div className="w-10 h-10 rounded-xl bg-[var(--warning-bg)] flex items-center justify-center text-[var(--warning)]">
+                <Code weight="duotone" size={22} />
               </div>
-              <div className="text-xs font-medium text-text">代码审查</div>
+              <div className="text-xs font-semibold text-text text-center">代码审查</div>
             </div>
           </motion.div>
         </div>

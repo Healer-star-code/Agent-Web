@@ -1,5 +1,5 @@
 /** @type {import('tailwindcss').Config} */
-export default {
+module.exports = {
   darkMode: 'class',
   content: [
     './index.html',
@@ -45,15 +45,15 @@ export default {
         'premium': 'cubic-bezier(0.16, 1, 0.3, 1)',
       },
       animation: {
-        'shimmer': 'shimmer 2s cubic-bezier(0.16, 1, 0.3, 1) infinite',
+        'shimmer': 'shimmer-sweep 2s cubic-bezier(0.16, 1, 0.3, 1) infinite',
         'float': 'float 6s ease-in-out infinite',
       },
       keyframes: {
-        shimmer: {
+        'shimmer-sweep': {
           '0%': { backgroundPosition: '-200% 0' },
           '100%': { backgroundPosition: '200% 0' },
         },
-        float: {
+        'float': {
           '0%, 100%': { transform: 'translateY(0)' },
           '50%': { transform: 'translateY(-12px)' },
         },
