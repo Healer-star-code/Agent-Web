@@ -14,7 +14,7 @@ export default defineConfig({
     port: 5173,
     proxy: {
       '/superking-api': {
-        target: 'http://127.0.0.1:30142',
+        target: 'http://127.0.0.1:3000',
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/superking-api/, ''),
       },

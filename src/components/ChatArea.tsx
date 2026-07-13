@@ -6,8 +6,6 @@ type ChatSessionState = {
   hasMessages: boolean
   streaming: boolean
   error: string | null
-  pendingPermissions: import('../lib/piApi').PermissionRequestInfo[]
-  pendingQuestions: import('../lib/piApi').QuestionInfo[]
   sdkSessionId: string | null
   sdkSessionInfo: SessionInfo | null
   eventSource: EventSource | null
@@ -27,8 +25,6 @@ type ChatSessionState = {
   skillParser: SkillStreamParser | null
   pendingSkillFreeText: string
   normalizeSessionId: string | null
-  toolPermissionMap: Map<string, import('../lib/piApi').PermissionRequestInfo>
-  allowedSessionPermissions: Map<string, Set<string>>
   scannedForArtifacts: Map<string, number>
   fallbackScanTimer: ReturnType<typeof setTimeout> | null
   /** 该会话是否已完成首次历史消息加载 */
@@ -40,8 +36,6 @@ import { ChatInput, type ChatInputHandle } from './ChatInput'
 import { Typewriter } from './Typewriter'
 import { ReasoningBlock } from './ReasoningBlock'
 
-import { PermissionDialog } from './PermissionDialog'
-import { QuestionDialog } from './QuestionDialog'
 import { XiaojinLogo } from './XiaojinLogo'
 
 import {
@@ -50,14 +44,7 @@ import {
   getMessages,
   sendPrompt,
   abortSession,
-  resolvePermission,
-  answerQuestion,
-  rejectQuestion,
   type WebAgentEvent,
-  type PermissionRequestInfo,
-  type QuestionInfo,
-  type ModelProviderInfo,
-  type ConfigInfo,
   type ApiImagePayload,
 } from '../lib/piApi'
 import { createSkillStreamParser, extractSkillBlocks, type SkillStreamParser } from '../lib/skillContentParser'
@@ -68,11 +55,6 @@ interface Props {
   newSessionCwd: string | null
   chatInputRef: React.RefObject<ChatInputHandle | null>
   onSessionCreated?: (session: SessionInfo) => void
-  modelProviders: ModelProviderInfo[]
-  config: ConfigInfo | null
-  onSwitchModel: (sessionId: string, provider: string, modelId: string) => void
-  /** YOLO mode: 收到 permission_requested 时自动允许，不弹窗 */
-  autoApproveAllTools?: boolean
 }
 
 const APP_INSTITUTION = (import.meta.env.VITE_APP_INSTITUTION as string | undefined) ?? `v${__APP_VERSION__}`
@@ -222,13 +204,11 @@ function toMessageAttachments(attachments: LocalAttachment[] | undefined): Messa
   }))
 }
 
-export function ChatArea({ session, selectedCwd, newSessionCwd, chatInputRef, onSessionCreated, modelProviders, config, onSwitchModel, autoApproveAllTools = false }: Props) {
+export function ChatArea({ session, selectedCwd, newSessionCwd, chatInputRef, onSessionCreated }: Props) {
   const [messages, _setMessages] = useState<Message[]>([])
   const [hasMessages, setHasMessages] = useState(false)
   const [streaming, setStreaming] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [pendingPermissions, setPendingPermissions] = useState<PermissionRequestInfo[]>([])
-  const [pendingQuestions, setPendingQuestions] = useState<QuestionInfo[]>([])
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const sdkSessionIdRef = useRef<string | null>(null)
@@ -261,13 +241,7 @@ export function ChatArea({ session, selectedCwd, newSessionCwd, chatInputRef, on
   const isUserNearBottomRef = useRef(true)
   const forceScrollRef = useRef(false)
   const normalizeSessionIdRef = useRef<string | null>(null)
-  const toolPermissionMapRef = useRef<Map<string, PermissionRequestInfo>>(new Map())
 
-  // 本会话自动允许的权限规则：{ sessionId -> { kindKey -> true } }
-  const allowedSessionPermissionsRef = useRef<Map<string, Set<string>>>(new Map())
-
-  // YOLO mode：autoApproveAllTools 的 ref 镜像（handleAgentEvent 是稳定闭包，state 拿不到最新值）
-  const autoApproveAllToolsRef = useRef(autoApproveAllTools)
   // 记录已扫描过 artifact 的消息 id + content 长度，避免对同一条消息重复扫描
   const scannedForArtifactsRef = useRef<Map<string, number>>(new Map())
   // 兜底扫描 200ms debounce timer：高频 setMessages 时合并成一次扫描
@@ -293,8 +267,6 @@ export function ChatArea({ session, selectedCwd, newSessionCwd, chatInputRef, on
       hasMessages: false,
       streaming: false,
       error: null,
-      pendingPermissions: [],
-      pendingQuestions: [],
       sdkSessionId: sessionId,
       sdkSessionInfo: session ?? null,
       eventSource: null,
@@ -314,8 +286,6 @@ export function ChatArea({ session, selectedCwd, newSessionCwd, chatInputRef, on
       skillParser: null,
       pendingSkillFreeText: '',
       normalizeSessionId: sessionId,
-      toolPermissionMap: new Map(),
-      allowedSessionPermissions: new Map(),
       scannedForArtifacts: new Map(),
       fallbackScanTimer: null,
       loaded: false,
@@ -405,8 +375,6 @@ export function ChatArea({ session, selectedCwd, newSessionCwd, chatInputRef, on
       hasMessages,
       streaming,
       error,
-      pendingPermissions,
-      pendingQuestions,
       sdkSessionId: sdkSessionIdRef.current,
       sdkSessionInfo: sdkSessionInfoRef.current,
       eventSource: eventSourceRef.current,
@@ -426,8 +394,6 @@ export function ChatArea({ session, selectedCwd, newSessionCwd, chatInputRef, on
       skillParser: skillParserRef.current,
       pendingSkillFreeText: pendingSkillFreeTextRef.current,
       normalizeSessionId: normalizeSessionIdRef.current,
-      toolPermissionMap: new Map(toolPermissionMapRef.current),
-      allowedSessionPermissions: new Map(allowedSessionPermissionsRef.current),
       scannedForArtifacts: new Map(scannedForArtifactsRef.current),
       fallbackScanTimer: null,
       loaded: true,
@@ -465,8 +431,6 @@ export function ChatArea({ session, selectedCwd, newSessionCwd, chatInputRef, on
       setHasMessages(saved.hasMessages)
       setStreaming(saved.streaming)
       setError(saved.error)
-      setPendingPermissions(saved.pendingPermissions)
-      setPendingQuestions(saved.pendingQuestions)
       sdkSessionIdRef.current = saved.sdkSessionId
       sdkSessionInfoRef.current = saved.sdkSessionInfo
       eventSourceRef.current = saved.eventSource
@@ -487,23 +451,11 @@ export function ChatArea({ session, selectedCwd, newSessionCwd, chatInputRef, on
       skillParserRef.current = saved.skillParser
       pendingSkillFreeTextRef.current = saved.pendingSkillFreeText
       normalizeSessionIdRef.current = saved.normalizeSessionId
-      toolPermissionMapRef.current = saved.toolPermissionMap
-      allowedSessionPermissionsRef.current = saved.allowedSessionPermissions
       scannedForArtifactsRef.current = saved.scannedForArtifacts
       fallbackScanTimerRef.current = saved.fallbackScanTimer
       forceScrollRef.current = true
       if (!saved.eventSource) {
         void connectEvents(sessionId)
-      }
-      if (autoApproveAllTools && saved.pendingPermissions.length > 0) {
-        for (const req of saved.pendingPermissions) {
-          const sid = req.sessionId || sdkSessionIdRef.current
-          if (!sid) continue
-          void resolvePermission(sid, req.permissionId, true).catch((err) => {
-            console.error('[YOLO] flush restored permission failed:', err)
-          })
-        }
-        setPendingPermissions([])
       }
       return
     }
@@ -516,8 +468,6 @@ export function ChatArea({ session, selectedCwd, newSessionCwd, chatInputRef, on
     setHasMessages(false)
     setStreaming(false)
     setError(null)
-    setPendingPermissions([])
-    setPendingQuestions([])
     sdkSessionIdRef.current = sessionId
     sdkSessionInfoRef.current = session ?? null
     eventSourceRef.current = null
@@ -536,8 +486,6 @@ export function ChatArea({ session, selectedCwd, newSessionCwd, chatInputRef, on
     skillParserRef.current = null
     pendingSkillFreeTextRef.current = ''
     normalizeSessionIdRef.current = sessionId
-    toolPermissionMapRef.current = new Map()
-    allowedSessionPermissionsRef.current = new Map()
     scannedForArtifactsRef.current = new Map()
     if (fallbackScanTimerRef.current) {
       clearTimeout(fallbackScanTimerRef.current)
@@ -595,44 +543,27 @@ export function ChatArea({ session, selectedCwd, newSessionCwd, chatInputRef, on
   }
 
   useEffect(() => {
-    autoApproveAllToolsRef.current = autoApproveAllTools
-  }, [autoApproveAllTools])
-
-  // YOLO 开启时立刻 flush 所有 pending permissions：直接 resolve(true) 并清空队列
-  // 防止开启前已有 pending dialog 在屏幕上继续渲染（可能因 diff 对象等历史 bug 崩溃）
-  useEffect(() => {
-    if (!autoApproveAllTools) return
-    setPendingPermissions((prev) => {
-      if (prev.length === 0) return prev
-      for (const req of prev) {
-        const sid = req.sessionId || sdkSessionIdRef.current
-        if (!sid) continue
-        void resolvePermission(sid, req.permissionId, true).catch((err) => {
-          console.error('[YOLO] flush pending permission failed:', err)
-        })
+    return () => {
+      // 组件卸载：关闭所有会话的 SSE，清理所有节流定时器
+      closeAllEventSources()
+      if (textDeltaTimerRef.current) {
+        clearTimeout(textDeltaTimerRef.current)
+        textDeltaTimerRef.current = null
       }
-      return []
-    })
-  }, [autoApproveAllTools])
-
-  function getPermissionKey(kind: string, options: unknown): string {
-    return `${kind}:${JSON.stringify(options ?? {})}`
-  }
-
-  function isSessionAllowed(sessionId: string, kind: string, options: unknown): boolean {
-    const set = allowedSessionPermissionsRef.current.get(sessionId)
-    if (!set) return false
-    return set.has(getPermissionKey(kind, options))
-  }
-
-  function addSessionAllowed(sessionId: string, kind: string, options: unknown) {
-    let set = allowedSessionPermissionsRef.current.get(sessionId)
-    if (!set) {
-      set = new Set()
-      allowedSessionPermissionsRef.current.set(sessionId, set)
+      if (thinkingDeltaTimerRef.current) {
+        clearTimeout(thinkingDeltaTimerRef.current)
+        thinkingDeltaTimerRef.current = null
+      }
+      if (toolUpdateTimerRef.current) {
+        clearTimeout(toolUpdateTimerRef.current)
+        toolUpdateTimerRef.current = null
+      }
+      if (fallbackScanTimerRef.current) {
+        clearTimeout(fallbackScanTimerRef.current)
+        fallbackScanTimerRef.current = null
+      }
     }
-    set.add(getPermissionKey(kind, options))
-  }
+  }, [])
 
   const normalizeMessagesForSession = useCallback(async (sessionId: string) => {
     if (!sessionId) return
@@ -642,16 +573,6 @@ export function ChatArea({ session, selectedCwd, newSessionCwd, chatInputRef, on
       const loadedMessages = await getMessages(sessionId, cwd)
       if (normalizeSessionIdRef.current !== sessionId) return
       setMessages((currentMessages) => {
-        // 保留当前 UI 中正在等待授权的 tool step 状态，避免 normalize 把它覆盖回 running
-        const waitingMap = new Map<string, string>()
-        for (const msg of currentMessages) {
-          for (const step of msg.steps ?? []) {
-            if (step.type === 'tool' && step.status === 'waiting_permission' && step.permissionId) {
-              waitingMap.set(step.id, step.permissionId)
-            }
-          }
-        }
-
         // 保留前端独有的字段（后端不知道，normalize 会丢）：
         // 1) 用户消息的 attachments（上传文件卡片）
         // 2) assistant 消息的 source==='local-scan' artifacts（AI 生成文件卡片）
@@ -669,20 +590,6 @@ export function ChatArea({ session, selectedCwd, newSessionCwd, chatInputRef, on
         }
 
         let normalized = normalizeLoadedMessages(loadedMessages)
-        if (waitingMap.size > 0) {
-          normalized = normalized.map((msg) => {
-            if (msg.role !== 'assistant' || !msg.steps) return msg
-            return {
-              ...msg,
-              steps: msg.steps.map((s) => {
-                if (s.type === 'tool' && waitingMap.has(s.id)) {
-                  return { ...s, status: 'waiting_permission' as const, permissionId: waitingMap.get(s.id) }
-                }
-                return s
-              }),
-            }
-          })
-        }
         // 按同 role 出现顺序回填前端独有字段
         {
           let userIdx = 0
@@ -947,9 +854,7 @@ export function ChatArea({ session, selectedCwd, newSessionCwd, chatInputRef, on
     }
 
     // 非当前会话的流式/状态事件：更新该会话快照，不污染当前 UI。
-    // 权限/提问弹窗需要全局处理（因为 ChatArea 常驻，弹窗不应随切会话消失）。
-    const isDialogEvent = event.type === 'permission_requested' || event.type === 'permission_resolved' || event.type === 'question' || event.type === 'question_resolved'
-    if (!isActiveSession && !isDialogEvent) {
+    if (!isActiveSession) {
       applyBackgroundAgentEvent(event, sourceSessionId)
       return
     }
@@ -1201,96 +1106,6 @@ export function ChatArea({ session, selectedCwd, newSessionCwd, chatInputRef, on
         }
         if (sessionId) {
           void normalizeMessagesForSession(sessionId)
-        }
-        break
-      }
-      case 'permission_requested': {
-        const request = event.request
-        const targetSessionId = request.sessionId || sdkSessionIdRef.current
-        if (!targetSessionId) break
-
-        // YOLO mode：全局自动允许（优先级最高，跳过一切兜底逻辑）
-        if (autoApproveAllToolsRef.current) {
-          void resolvePermission(targetSessionId, request.permissionId, true).catch((err) => {
-            console.error('[YOLO] auto-approve permission failed:', err)
-          })
-          break
-        }
-
-        if (isSessionAllowed(targetSessionId, request.kind, request.options)) {
-          void resolvePermission(targetSessionId, request.permissionId, true)
-          break
-        }
-
-        setPendingPermissions((prev) => {
-          if (prev.some((p) => p.permissionId === request.permissionId)) return prev
-          return [...prev, request]
-        })
-
-        // 将当前正在运行的对应工具标记为等待授权，并记录 toolStepId -> permission 映射
-        setMessages((prev) => prev.map((msg) => {
-          if (msg.role !== 'assistant' || !msg.steps) return msg
-          return {
-            ...msg,
-            steps: msg.steps.map((s) => {
-              if (s.type === 'tool' && s.name === request.kind && s.status === 'running') {
-                toolPermissionMapRef.current.set(s.id, request)
-                return { ...s, status: 'waiting_permission' as const, permissionId: request.permissionId }
-              }
-              return s
-            }),
-          }
-        }))
-
-        // 后台会话：同步更新快照，切回时仍能看到等待授权状态
-        if (!isActiveSession) {
-          const bgState = getOrCreateSessionState(sourceSessionId)
-          if (!bgState.pendingPermissions.some((p) => p.permissionId === request.permissionId)) {
-            bgState.pendingPermissions = [...bgState.pendingPermissions, request]
-          }
-          bgState.messages = bgState.messages.map((msg) => {
-            if (msg.role !== 'assistant' || !msg.steps) return msg
-            return {
-              ...msg,
-              steps: msg.steps.map((s) => {
-                if (s.type === 'tool' && s.name === request.kind && s.status === 'running') {
-                  bgState.toolPermissionMap.set(s.id, request)
-                  return { ...s, status: 'waiting_permission' as const, permissionId: request.permissionId }
-                }
-                return s
-              }),
-            }
-          })
-        }
-        break
-      }
-      case 'permission_resolved': {
-        setPendingPermissions((prev) => prev.filter((p) => p.permissionId !== event.permissionId))
-        if (!isActiveSession) {
-          const bgState = getOrCreateSessionState(sourceSessionId)
-          bgState.pendingPermissions = bgState.pendingPermissions.filter((p) => p.permissionId !== event.permissionId)
-        }
-        break
-      }
-      case 'question': {
-        const q = event.question
-        setPendingQuestions((prev) => {
-          if (prev.some((x) => x.questionId === q.questionId)) return prev
-          return [...prev, q]
-        })
-        if (!isActiveSession) {
-          const bgState = getOrCreateSessionState(sourceSessionId)
-          if (!bgState.pendingQuestions.some((x) => x.questionId === q.questionId)) {
-            bgState.pendingQuestions = [...bgState.pendingQuestions, q]
-          }
-        }
-        break
-      }
-      case 'question_resolved': {
-        setPendingQuestions((prev) => prev.filter((q) => q.questionId !== event.questionId))
-        if (!isActiveSession) {
-          const bgState = getOrCreateSessionState(sourceSessionId)
-          bgState.pendingQuestions = bgState.pendingQuestions.filter((q) => q.questionId !== event.questionId)
         }
         break
       }
@@ -1568,69 +1383,6 @@ export function ChatArea({ session, selectedCwd, newSessionCwd, chatInputRef, on
     pendingSkillFreeTextRef.current = ''
   }, [])
 
-  const handleResolvePermission = useCallback(async (request: PermissionRequestInfo, decision: 'allow_once' | 'allow_session' | 'deny') => {
-    const sessionId = request.sessionId || sdkSessionIdRef.current
-    if (!sessionId) return
-
-    setPendingPermissions((prev) => prev.filter((p) => p.permissionId !== request.permissionId))
-
-    if (decision === 'deny') {
-      try {
-        await resolvePermission(sessionId, request.permissionId, false)
-      } catch (err) {
-        console.error('Resolve permission failed:', err)
-      }
-      return
-    }
-
-    if (decision === 'allow_session') {
-      addSessionAllowed(sessionId, request.kind, request.options)
-      // 如果允许的是非当前会话，同步更新该会话快照，避免切回后丢失 allow_session 决策
-      if (sessionId !== activeSessionIdRef.current) {
-        const bgState = sessionStatesRef.current.get(sessionId)
-        if (bgState) {
-          const key = getPermissionKey(request.kind, request.options)
-          let set = bgState.allowedSessionPermissions.get(sessionId)
-          if (!set) {
-            set = new Set<string>()
-            bgState.allowedSessionPermissions.set(sessionId, set)
-          }
-          set.add(key)
-        }
-      }
-    }
-
-    try {
-      await resolvePermission(sessionId, request.permissionId, true)
-    } catch (err) {
-      console.error('Resolve permission failed:', err)
-    }
-  }, [])
-
-  const handleResolveToolPermission = useCallback((toolStepId: string, decision: 'allow_once' | 'allow_session' | 'deny') => {
-    const request = toolPermissionMapRef.current.get(toolStepId)
-    if (!request) return
-    void handleResolvePermission(request, decision)
-  }, [handleResolvePermission])
-
-  const handleAnswerQuestion = useCallback(async (question: QuestionInfo, answers: string[][]) => {
-    try {
-      await answerQuestion(question.questionId, answers)
-      setPendingQuestions((prev) => prev.filter((q) => q.questionId !== question.questionId))
-    } catch (err) {
-      console.error('Answer question failed:', err)
-    }
-  }, [])
-
-  const handleRejectQuestion = useCallback(async (question: QuestionInfo) => {
-    try {
-      await rejectQuestion(question.questionId)
-      setPendingQuestions((prev) => prev.filter((q) => q.questionId !== question.questionId))
-    } catch (err) {
-      console.error('Reject question failed:', err)
-    }
-  }, [])
-
   useEffect(() => {
     const previousActiveId = activeSessionIdRef.current
     activeSessionIdRef.current = session?.id ?? null
@@ -1647,8 +1399,6 @@ export function ChatArea({ session, selectedCwd, newSessionCwd, chatInputRef, on
       setHasMessages(!!session)
       setStreaming(false)
       setError(null)
-      setPendingPermissions([])
-      setPendingQuestions([])
       sdkSessionIdRef.current = null
       sdkSessionInfoRef.current = session
       eventSourceRef.current = null
@@ -1669,8 +1419,6 @@ export function ChatArea({ session, selectedCwd, newSessionCwd, chatInputRef, on
       }
       pendingSkillFreeTextRef.current = ''
       normalizeSessionIdRef.current = null
-      toolPermissionMapRef.current = new Map()
-      allowedSessionPermissionsRef.current = new Map()
       scannedForArtifactsRef.current.clear()
       if (fallbackScanTimerRef.current) {
         clearTimeout(fallbackScanTimerRef.current)
@@ -1855,37 +1603,6 @@ export function ChatArea({ session, selectedCwd, newSessionCwd, chatInputRef, on
           </span>
         )}
         <div style={{ flex: 1 }} />
-        {session?.id && modelProviders.length > 0 && (
-          <select
-            value={`${session.model?.provider ?? config?.defaultModel?.provider ?? ''}/${session.model?.modelId ?? config?.defaultModel?.id ?? ''}`}
-            onChange={(e) => {
-              const [provider, modelId] = e.target.value.split('/')
-              if (provider && modelId && session.id) {
-                onSwitchModel(session.id, provider, modelId)
-              }
-            }}
-            style={{
-              padding: '4px 8px',
-              borderRadius: 'var(--radius-sm)',
-              border: '1px solid var(--border)',
-              background: 'var(--bg)',
-              color: 'var(--text-dim)',
-              fontSize: 'var(--font-xs)',
-              fontFamily: 'var(--font-mono)',
-              outline: 'none',
-              cursor: 'pointer',
-              maxWidth: 180,
-            }}
-          >
-            {modelProviders.flatMap((provider) =>
-              provider.models.map((model) => (
-                <option key={`${provider.id}/${model.id}`} value={`${provider.id}/${model.id}`}>
-                  {provider.name}/{model.name}
-                </option>
-              ))
-            )}
-          </select>
-        )}
       </div>
 
       <div ref={scrollContainerRef} style={{ flex: 1, overflowY: 'auto', paddingTop: 16 }}>
@@ -1922,7 +1639,7 @@ export function ChatArea({ session, selectedCwd, newSessionCwd, chatInputRef, on
             return (
               <div key={m.id} style={{ marginBottom: m.role === 'user' ? 16 : 0 }}>
                 {hasSteps && (
-                  <ReasoningBlock steps={displaySteps!} onResolveToolPermission={handleResolveToolPermission} />
+                  <ReasoningBlock steps={displaySteps!} />
                 )}
                 {!hasSteps && isActiveAssistant && !m.content && (
                   <PendingTaskCard task={m.pendingTask} />
@@ -1945,21 +1662,6 @@ export function ChatArea({ session, selectedCwd, newSessionCwd, chatInputRef, on
       </div>
 
       <ChatInput ref={chatInputRef} onSend={handleSend} onAbort={handleAbort} isStreaming={streaming} />
-
-      {pendingPermissions.length > 0 && (
-        <PermissionDialog
-          request={pendingPermissions[0]}
-          onResolve={(decision) => handleResolvePermission(pendingPermissions[0], decision)}
-        />
-      )}
-
-      {pendingQuestions.length > 0 && (
-        <QuestionDialog
-          question={pendingQuestions[0]}
-          onSubmit={(answers) => handleAnswerQuestion(pendingQuestions[0], answers)}
-          onReject={() => handleRejectQuestion(pendingQuestions[0])}
-        />
-      )}
     </div>
   )
 }

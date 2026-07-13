@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { testConnection } from '../lib/piApi'
-import { ZapIcon, AlertTriangleIcon } from './Icon'
+import { testConnection, setStoredServerUrl } from '../lib/piApi'
 
 interface Props {
   isDark: boolean
@@ -11,26 +10,14 @@ interface Props {
   onModeChange: (mode: 'young' | 'senior') => void
   serverUrl: string
   onServerUrlChange: (url: string) => void
-  password: string
-  onPasswordChange: (password: string) => void
-  localHelperUrl: string
-  onLocalHelperUrlChange: (url: string) => void
-  autoApproveAllTools: boolean
-  onAutoApproveAllToolsChange: (v: boolean) => void
   onClose: () => void
 }
 
-export function SettingsPanel({ isDark, onThemeChange, fontSize, onFontSizeChange, mode, onModeChange, serverUrl, onServerUrlChange, password, onPasswordChange, localHelperUrl, onLocalHelperUrlChange, autoApproveAllTools, onAutoApproveAllToolsChange, onClose }: Props) {
+export function SettingsPanel({ isDark, onThemeChange, fontSize, onFontSizeChange, mode, onModeChange, serverUrl, onServerUrlChange, onClose }: Props) {
   const [draftTheme, setDraftTheme] = useState(isDark)
   const [draftFontSize, setDraftFontSize] = useState(fontSize)
   const [draftMode, setDraftMode] = useState(mode)
   const [draftServerUrl, setDraftServerUrl] = useState(serverUrl)
-  const [draftPassword, setDraftPassword] = useState(password)
-  const [draftLocalHelperUrl, setDraftLocalHelperUrl] = useState(localHelperUrl)
-  const [draftAutoApproveAll, setDraftAutoApproveAll] = useState(autoApproveAllTools)
-  const [showRiskConfirm, setShowRiskConfirm] = useState(false)
-  const [showPassword, setShowPassword] = useState(false)
-  const [passwordError, setPasswordError] = useState<string | null>(null)
   const [testStatus, setTestStatus] = useState<{ loading: boolean; ok?: boolean; message?: string } | null>(null)
 
   useEffect(() => {
@@ -39,81 +26,52 @@ export function SettingsPanel({ isDark, onThemeChange, fontSize, onFontSizeChang
       setDraftFontSize(fontSize)
       setDraftMode(mode)
       setDraftServerUrl(serverUrl)
-      setDraftPassword(password)
-      setDraftLocalHelperUrl(localHelperUrl)
-      setDraftAutoApproveAll(autoApproveAllTools)
-      setPasswordError(null)
     })
-  }, [isDark, fontSize, mode, serverUrl, password, localHelperUrl, autoApproveAllTools])
+  }, [isDark, fontSize, mode, serverUrl])
 
-  // 把服务器地址/密码立即应用到 App state 并持久化，不关闭设置面板。
-  // 测试连接成功和保存时都会调用。
-  const applyServerSettings = useCallback((url: string, pwd: string, helperUrl?: string) => {
+  const applyServerSettings = useCallback((url: string) => {
     const trimmedUrl = url.trim()
-    const trimmedHelperUrl = (helperUrl ?? draftLocalHelperUrl).trim()
     try {
-      localStorage.setItem('pi-server-url', trimmedUrl)
-      localStorage.setItem('pi-server-password', pwd)
-      localStorage.setItem('pi-local-helper-url', trimmedHelperUrl)
+      setStoredServerUrl(trimmedUrl)
     } catch (err) {
       console.error('Failed to save server settings to localStorage:', err)
-      setPasswordError('保存失败，请检查浏览器是否允许本地存储')
       return false
     }
-    setPasswordError(null)
     onServerUrlChange(trimmedUrl)
-    onPasswordChange(pwd)
-    onLocalHelperUrlChange(trimmedHelperUrl)
     return true
-  }, [draftLocalHelperUrl, onServerUrlChange, onPasswordChange, onLocalHelperUrlChange])
+  }, [onServerUrlChange])
 
   const saveAndClose = useCallback(() => {
-    if (!draftPassword) {
-      setPasswordError('必须设置访问密码才能连接超级小金')
-      return
-    }
-    if (!applyServerSettings(draftServerUrl, draftPassword, draftLocalHelperUrl)) return
-    setPasswordError(null)
+    if (!applyServerSettings(draftServerUrl)) return
     onThemeChange(draftTheme)
     onFontSizeChange(draftFontSize)
     onModeChange(draftMode)
-    onAutoApproveAllToolsChange(draftAutoApproveAll)
     onClose()
-  }, [draftPassword, draftServerUrl, draftLocalHelperUrl, draftTheme, draftFontSize, draftMode, draftAutoApproveAll, applyServerSettings, onThemeChange, onFontSizeChange, onModeChange, onAutoApproveAllToolsChange, onClose])
+  }, [draftServerUrl, draftTheme, draftFontSize, draftMode, applyServerSettings, onThemeChange, onFontSizeChange, onModeChange, onClose])
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return
-      // 风险确认对话框打开时，ESC 只关风险对话框，不关整个设置面板
-      if (showRiskConfirm) {
-        setShowRiskConfirm(false)
-        return
-      }
       saveAndClose()
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
-  }, [saveAndClose, showRiskConfirm])
+  }, [saveAndClose])
 
   const ALL_FONT_SIZES = [14, 16, 18, 20, 22]
   const DEFAULT_SIZE = 16
 
   const handleModeChange = (newMode: 'young' | 'senior') => {
     setDraftMode(newMode)
-    // Keep user's font size choice; only reset if current size is not in valid range
     if (!ALL_FONT_SIZES.includes(draftFontSize)) {
       setDraftFontSize(DEFAULT_SIZE)
     }
   }
 
-
-
   return (
     <div onClick={() => {
-      // 二次确认对话框打开时，禁用外层 backdrop 的 saveAndClose
-      if (showRiskConfirm) return
       saveAndClose()
-    }} style={{ 
+    }} style={{
       position: 'fixed', inset: 0, zIndex: 299,
       background: 'var(--overlay-bg)',
       backdropFilter: 'blur(4px)',
@@ -146,60 +104,16 @@ export function SettingsPanel({ isDark, onThemeChange, fontSize, onFontSizeChang
                 type="text"
                 value={draftServerUrl}
                 onChange={(e) => setDraftServerUrl(e.target.value)}
-                placeholder="http://127.0.0.1:30142"
+                placeholder="http://127.0.0.1:3000"
                 className="input-field"
               />
-            </div>
-            <div>
-              <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 6 }}>访问密码</div>
-              <div style={{ display: 'flex', gap: 8 }}>
-                <input
-                  type={showPassword ? 'text' : 'password'}
-                  value={draftPassword}
-                  onChange={(e) => { setDraftPassword(e.target.value); setPasswordError(null) }}
-                  placeholder="SUPER_KING_SERVER_PASSWORD"
-                  autoFocus={!draftPassword}
-                  className="input-field"
-                  style={{ flex: 1, borderColor: passwordError ? 'var(--danger)' : undefined }}
-                />
-                <button
-                  onClick={() => setShowPassword((v) => !v)}
-                  type="button"
-                  style={{
-                    padding: '0 12px', borderRadius: 'var(--radius-lg)',
-                    border: '1px solid var(--border)', background: 'var(--bg-hover)',
-                    color: 'var(--text-muted)', cursor: 'pointer', fontSize: 13,
-                  }}
-                >
-                  {showPassword ? '隐藏' : '显示'}
-                </button>
-              </div>
-              {passwordError && (
-                <div style={{ marginTop: 6, fontSize: 12, color: 'var(--danger)', lineHeight: 1.4 }}>
-                  {passwordError}
-                </div>
-              )}
-              {!passwordError && !draftPassword && (
-                <div style={{ marginTop: 6, fontSize: 12, color: 'var(--text-dim)', lineHeight: 1.4 }}>
-                  当前后端已启用认证，必须填写密码才能连接
-                </div>
-              )}
               <button
                 onClick={async () => {
-                  if (!draftPassword) {
-                    setPasswordError('必须设置访问密码才能测试连接')
-                    setTestStatus(null)
-                    return
-                  }
-                  setPasswordError(null)
                   setTestStatus({ loading: true })
                   try {
-                    // 先把草稿设置写下去再测试，确保 testConnection 读到最新地址/密码
-                    localStorage.setItem('pi-server-url', draftServerUrl.trim())
-                    localStorage.setItem('pi-server-password', draftPassword)
+                    setStoredServerUrl(draftServerUrl.trim())
                     await testConnection()
-                    // 测试通过立即应用到 App state，让侧边栏会话列表自动刷新
-                    const applied = applyServerSettings(draftServerUrl, draftPassword)
+                    const applied = applyServerSettings(draftServerUrl)
                     setTestStatus({
                       loading: false,
                       ok: true,
@@ -238,19 +152,6 @@ export function SettingsPanel({ isDark, onThemeChange, fontSize, onFontSizeChang
                   {testStatus.message}
                 </div>
               )}
-            </div>
-            <div>
-              <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 6 }}>本地增强服务地址</div>
-              <input
-                type="text"
-                value={draftLocalHelperUrl}
-                onChange={(e) => setDraftLocalHelperUrl(e.target.value)}
-                placeholder="http://127.0.0.1:30143"
-                className="input-field"
-              />
-              <div style={{ marginTop: 6, fontSize: 12, color: 'var(--text-dim)', lineHeight: 1.4 }}>
-                用于读取本地 Skills、Artifacts 等 super-king 文档未定义的增强能力
-              </div>
             </div>
           </div>
         </div>
@@ -389,179 +290,12 @@ export function SettingsPanel({ isDark, onThemeChange, fontSize, onFontSizeChang
           </div>
         </div>
 
-        {/* Permissions / YOLO mode */}
-        <div style={{ marginBottom: 24 }}>
-          <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-dim)', marginBottom: 10, textTransform: 'uppercase', letterSpacing: '0.05em' }}>权限设置</div>
-          <div
-            style={{
-              padding: '14px 16px',
-              borderRadius: 'var(--radius-lg)',
-              border: draftAutoApproveAll ? '2px solid var(--accent-senior)' : '1px solid var(--border)',
-              background: draftAutoApproveAll ? 'var(--accent-senior-bg)' : 'var(--bg-hover)',
-              transition: 'all 0.15s',
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 0 }}>
-                <ZapIcon width={18} height={18} style={{ color: 'var(--accent-senior)' }} />
-                <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)' }}>
-                  自动允许所有工具调用
-                </div>
-              </div>
-              {/* macOS-style toggle */}
-              <button
-                role="switch"
-                aria-checked={draftAutoApproveAll}
-                onClick={(e) => {
-                  e.stopPropagation()
-                  if (draftAutoApproveAll) {
-                    // 关闭：直接生效，不二次确认
-                    setDraftAutoApproveAll(false)
-                  } else {
-                    // 开启：先弹二次确认
-                    setShowRiskConfirm(true)
-                  }
-                }}
-                style={{
-                  flexShrink: 0,
-                  position: 'relative',
-                  width: 44,
-                  height: 24,
-                  borderRadius: 999,
-                  border: 'none',
-                  background: draftAutoApproveAll ? 'var(--accent-senior)' : 'var(--bg-selected)',
-                  cursor: 'pointer',
-                  transition: 'background 0.15s',
-                  padding: 0,
-                }}
-              >
-                <span
-                  style={{
-                    position: 'absolute',
-                    top: 2,
-                    left: draftAutoApproveAll ? 22 : 2,
-                    width: 20,
-                    height: 20,
-                    borderRadius: '50%',
-                    background: '#fff',
-                    boxShadow: '0 1px 3px rgba(0,0,0,0.25)',
-                    transition: 'left 0.15s',
-                  }}
-                />
-              </button>
-            </div>
-            <div style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.55, marginTop: 10 }}>
-              开启后 AI 调用 read / write / edit / bash 等工具时不再弹窗询问，直接放行。
-            </div>
-            <div
-              style={{
-                marginTop: 10,
-                padding: '8px 10px',
-                borderRadius: 'var(--radius-md)',
-                background: 'var(--warning-bg)',
-                border: '1px solid var(--accent-senior)',
-                fontSize: 12,
-                color: 'var(--accent-senior)',
-                lineHeight: 1.5,
-              }}
-            >
-              <AlertTriangleIcon width={13} height={13} /> 风险提示：AI 将能直接读写文件、运行命令。仅推荐在你完全信任 AI 输出时开启。
-            </div>
-          </div>
-        </div>
 
         {/* Save button */}
-        <button onClick={saveAndClose} disabled={!draftPassword} className={`btn-save ${draftMode === 'senior' ? 'senior' : ''}`}>
-          {draftPassword ? '保存并连接' : '请先填写访问密码'}
+        <button onClick={saveAndClose} className={`btn-save ${draftMode === 'senior' ? 'senior' : ''}`}>
+          保存并连接
         </button>
       </div>
-
-      {/* 二次风险确认对话框 */}
-      {showRiskConfirm && (
-        <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            zIndex: 200,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            background: 'rgba(0,0,0,0.55)',
-            padding: 16,
-          }}
-          // 关键：阻止任何点击冒泡到外层 SettingsPanel 的 saveAndClose
-          onClick={(e) => {
-            e.stopPropagation()
-            if (e.target === e.currentTarget) setShowRiskConfirm(false)
-          }}
-          onMouseDown={(e) => e.stopPropagation()}
-        >
-          <div
-            // 内层卡片也阻止冒泡，防止任何子按钮 onClick 冒泡触发 backdrop 关闭
-            onClick={(e) => e.stopPropagation()}
-            onMouseDown={(e) => e.stopPropagation()}
-            style={{
-              width: '100%',
-              maxWidth: 480,
-              background: 'var(--bg-panel)',
-              border: '2px solid var(--accent-senior)',
-              borderRadius: 'var(--radius-xl)',
-              boxShadow: '0 20px 60px rgba(0,0,0,0.5)',
-              padding: '22px 24px',
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
-              <AlertTriangleIcon width={28} height={28} style={{ color: 'var(--accent-senior)' }} />
-              <div style={{ fontSize: 17, fontWeight: 700, color: 'var(--text)' }}>
-                确认开启「自动允许所有工具」？
-              </div>
-            </div>
-            <div style={{ fontSize: 14, color: 'var(--text-muted)', lineHeight: 1.65, marginBottom: 12 }}>
-              开启后 AI 将能：
-            </div>
-            <ul style={{ margin: 0, padding: '0 0 0 22px', fontSize: 14, color: 'var(--text)', lineHeight: 1.8, marginBottom: 14 }}>
-              <li>直接读写你电脑上的任意文件</li>
-              <li>直接运行命令行（包括删除、网络请求）</li>
-              <li>直接修改代码，不再向你询问</li>
-            </ul>
-            <div
-              style={{
-                padding: '10px 12px',
-                borderRadius: 'var(--radius-md)',
-                background: 'var(--accent-senior-bg)',
-                border: '1px solid var(--accent-senior)',
-                fontSize: 13,
-                color: 'var(--accent-senior)',
-                lineHeight: 1.55,
-                marginBottom: 18,
-              }}
-            >
-              仅在你完全信任 AI 输出时开启。你可以随时回到设置关闭此选项。
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation()
-                  setShowRiskConfirm(false)
-                }}
-                className="btn-ghost"
-              >
-                取消
-              </button>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation()
-                  setDraftAutoApproveAll(true)
-                  setShowRiskConfirm(false)
-                }}
-                className="btn-accent-senior"
-              >
-                我已了解风险，开启
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   )
 }

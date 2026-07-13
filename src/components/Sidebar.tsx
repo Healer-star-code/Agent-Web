@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useMemo } from 'react'
 import type { SessionInfo } from '../mockData'
-import { getMessages, selectDirectory } from '../lib/piApi'
+import { getMessages } from '../lib/piApi'
 import type { WebMessage } from '../lib/piApi'
 import { XiaojinLogo } from './XiaojinLogo'
 
@@ -13,12 +13,8 @@ interface Props {
   onPinSession?: (s: SessionInfo) => void
   pinnedIds?: Set<string>
   onNewSession: () => void
-  selectedCwd: string | null
-  recentCwds: string[]
-  onCwdChange: (cwd: string | null) => void
   sessionLoadError?: string | null
   sessionsLoading?: boolean
-  onOpenSkills?: () => void
   onToast?: (message: string, type?: 'success' | 'error') => void
   onRefreshSessions?: () => void
 }
@@ -35,14 +31,6 @@ function formatRelativeTime(dateStr: string): string {
   if (hours < 24) return `${hours}小时前`
   if (days < 7) return `${days}天前`
   return date.toLocaleDateString('zh-CN')
-}
-
-function shortenCwd(cwd: string): string {
-  const normalized = cwd.replace(/\\+/g, '/')
-  const prefix = /^[A-Za-z]:/.test(normalized) ? normalized.slice(0, 2) : ''
-  const parts = normalized.replace(/^[A-Za-z]:/, '').split('/').filter(Boolean)
-  if (parts.length <= 2) return cwd
-  return (prefix ? `${prefix}/` : '') + '\u2026/' + parts.slice(-2).join('/')
 }
 
 interface SessionTreeNode {
@@ -99,7 +87,6 @@ function buildSessionTree(sessions: SessionInfo[], pinnedIds?: Set<string>): Ses
 function PiAgentTitle() {
   return (
     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-      {/* 超级小金动态吉祥物 logo（亮/暗主题双版本，详见 XiaojinLogo.tsx） */}
       <XiaojinLogo size={28} />
       <span style={{ fontWeight: 750, fontSize: 'var(--font-md)', letterSpacing: '-0.02em', color: 'var(--text)' }}>
         超级小金
@@ -108,29 +95,44 @@ function PiAgentTitle() {
   )
 }
 
-export function Sidebar({ sessions, selectedId, onSelectSession, onNewSession, selectedCwd, recentCwds, onCwdChange, sessionLoadError, sessionsLoading, onOpenSkills, onDeleteSession, onRenameSession, onPinSession, pinnedIds, onToast, onRefreshSessions }: Props) {
-  const [dropdownOpen, setDropdownOpen] = useState(false)
-  const [selectingDirectory, setSelectingDirectory] = useState(false)
-  const [directoryError, setDirectoryError] = useState<string | null>(null)
+type NavId = 'chat' | 'skills' | 'new'
+
+interface NavItemDef {
+  id: NavId | 'new'
+  icon: string
+  label: string
+  action?: () => void
+}
+
+interface SkillDef {
+  id: string
+  name: string
+  desc: string
+}
+
+const SKILLS: SkillDef[] = [
+  { id: 'docx', name: 'Word 文档', desc: '创建和编辑 Word 文档' },
+  { id: 'pdf', name: 'PDF 处理', desc: '读取、生成与处理 PDF' },
+  { id: 'pptx', name: '演示文稿', desc: '制作 PowerPoint 演示文稿' },
+  { id: 'xlsx', name: '表格处理', desc: '处理 Excel 表格与数据' },
+  { id: 'skill-creator', name: '技能创建', desc: '自定义新技能与工具' },
+]
+
+export function Sidebar({ sessions, selectedId, onSelectSession, onNewSession, sessionLoadError, sessionsLoading, onDeleteSession, onRenameSession, onPinSession, pinnedIds, onToast, onRefreshSessions }: Props) {
+  const [activeNav, setActiveNav] = useState<NavId>('chat')
+  const [sessionsCollapsed, setSessionsCollapsed] = useState(false)
+  const [skillsCollapsed, setSkillsCollapsed] = useState(false)
   const [search, setSearch] = useState('')
   const searchRef = useRef<HTMLInputElement>(null)
-  const dropdownRef = useRef<HTMLDivElement>(null)
-  const cwdButtonRef = useRef<HTMLButtonElement>(null)
 
   useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
-        setDropdownOpen(false)
-      }
+    if (selectedId && activeNav === 'new') {
+      setActiveNav('chat')
     }
-    document.addEventListener('mousedown', handler)
-    return () => document.removeEventListener('mousedown', handler)
-  }, [])
+  }, [selectedId, activeNav])
 
   const filteredSessions = useMemo(() => {
-    let list = selectedCwd
-      ? sessions.filter((s) => s.cwd.replace(/[/\\]+/g, '/') === selectedCwd.replace(/[/\\]+/g, '/'))
-      : sessions
+    let list = sessions
     const q = search.trim().toLowerCase()
     if (q) {
       list = list.filter((s) => {
@@ -139,312 +141,341 @@ export function Sidebar({ sessions, selectedId, onSelectSession, onNewSession, s
       })
     }
     return list
-  }, [sessions, selectedCwd, search])
+  }, [sessions, search])
 
   const sessionTree = useMemo(() => buildSessionTree(filteredSessions, pinnedIds), [filteredSessions, pinnedIds])
 
-  async function handleCustomPath() {
-    if (selectingDirectory) return
-    setSelectingDirectory(true)
-    setDirectoryError(null)
-    try {
-      const selectedPath = await selectDirectory()
-      if (selectedPath) {
-        onCwdChange(selectedPath)
-        setDropdownOpen(false)
-        return
-      }
-      // 用户取消选择对话框：什么都不做，保持下拉打开让用户从历史里选。
-      // 注意：不能调 window.prompt() —— Electron 渲染进程禁用了 prompt/alert/confirm，
-      // 会抛 "prompt() is not supported"。
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err)
-      setDirectoryError(message)
-    } finally {
-      setSelectingDirectory(false)
+  const navItems: NavItemDef[] = [
+    { id: 'new', icon: '➕', label: '新建对话' },
+    { id: 'chat', icon: '💬', label: '历史对话' },
+    { id: 'skills', icon: '🧩', label: '技能库' },
+  ]
+
+  const sessionListSection = (
+    <div style={{ padding: '0 10px' }}>
+      <div
+        onClick={() => setSessionsCollapsed((v) => !v)}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '8px 0',
+          cursor: 'pointer',
+          userSelect: 'none',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontSize: 'var(--font-sm)', fontWeight: 600, color: 'var(--text)' }}>会话</span>
+          <span style={{
+            padding: '1px 6px',
+            borderRadius: 'var(--radius-xs)',
+            background: 'var(--bg-hover)',
+            fontSize: 'var(--font-xs)',
+            color: 'var(--text-muted)',
+          }}>
+            {filteredSessions.length}
+          </span>
+        </div>
+        <svg
+          width="10"
+          height="10"
+          viewBox="0 0 10 10"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.8"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          style={{
+            color: 'var(--text-dim)',
+            transform: sessionsCollapsed ? 'rotate(-90deg)' : 'none',
+            transition: 'transform 0.15s',
+          }}
+        >
+          <polyline points="2 3.5 5 6.5 8 3.5" />
+        </svg>
+      </div>
+      {!sessionsCollapsed && (
+        <div>
+          {sessionsLoading && (
+            <div style={{ padding: '12px 10px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {[...Array(5)].map((_, i) => (
+                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px' }}>
+                  <div style={{ width: 22, height: 22, borderRadius: 'var(--radius-sm)', background: 'var(--bg-hover)', animation: 'shimmer 1.5s ease-in-out infinite' }} />
+                  <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                    <div style={{ width: '60%', height: 10, borderRadius: 'var(--radius-xs)', background: 'var(--bg-hover)', animation: 'shimmer 1.5s ease-in-out infinite', animationDelay: `${i * 80}ms` }} />
+                    <div style={{ width: '40%', height: 8, borderRadius: 'var(--radius-xs)', background: 'var(--bg-hover)', animation: 'shimmer 1.5s ease-in-out infinite', animationDelay: `${i * 80 + 40}ms` }} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+          {!sessionsLoading && filteredSessions.length === 0 && (
+            <div style={{ padding: '28px 16px', textAlign: 'center', color: 'var(--text-muted)' }}>
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ margin: '0 auto 10px', opacity: 0.5 }}>
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+              </svg>
+              <div style={{ fontSize: 'var(--font-sm)', fontWeight: 500, marginBottom: 4, color: 'var(--text)' }}>
+                {sessionLoadError ? '暂时连接不上' : '暂无会话'}
+              </div>
+              <div style={{ fontSize: 'var(--font-xs)', lineHeight: 1.5, marginBottom: sessionLoadError ? 10 : 0 }}>
+                {sessionLoadError
+                  ? '还没连上超级小金服务。请检查服务是否已启动、地址和密码是否填对。'
+                  : '点击「新建对话」开始'}
+              </div>
+              {sessionLoadError && onRefreshSessions && (
+                <button
+                  onClick={onRefreshSessions}
+                  disabled={sessionsLoading}
+                  className="btn-sidebar-reload"
+                  style={{ cursor: sessionsLoading ? 'wait' : 'pointer' }}
+                >
+                  {sessionsLoading ? '正在刷新…' : '重新加载'}
+                </button>
+              )}
+            </div>
+          )}
+          {!sessionsLoading && sessionTree.map((node) => (
+            <SessionTreeItem
+              key={node.session.id}
+              node={node}
+              selectedId={selectedId}
+              onSelectSession={onSelectSession}
+              onDeleteSession={onDeleteSession}
+              onRenameSession={onRenameSession}
+              onPinSession={onPinSession}
+              pinnedIds={pinnedIds}
+              depth={0}
+              onToast={onToast}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  )
+
+  const renderContent = () => {
+    switch (activeNav) {
+      case 'chat':
+      case 'new':
+        return (
+          <div style={{ flex: '1 1 0', overflowY: 'auto', padding: '0', minHeight: 80 }}>
+            <div style={{ padding: '10px 10px 8px', position: 'relative' }}>
+              <svg
+                width="12"
+                height="12"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="var(--text-dim)"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                style={{ position: 'absolute', left: 19, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }}
+              >
+                <circle cx="11" cy="11" r="8" />
+                <line x1="21" y1="21" x2="16.65" y2="16.65" />
+              </svg>
+              <input
+                ref={searchRef}
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="搜索会话..."
+                style={{
+                  width: '100%',
+                  padding: '6px 10px 6px 28px',
+                  background: 'var(--bg)',
+                  border: '1px solid var(--border)',
+                  borderRadius: 'var(--radius-sm)',
+                  color: 'var(--text)',
+                  fontSize: 'var(--font-sm)',
+                  outline: 'none',
+                }}
+              />
+              {search && (
+                <button
+                  onClick={() => { setSearch(''); searchRef.current?.focus() }}
+                  style={{
+                    position: 'absolute',
+                    right: 16,
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    width: 18,
+                    height: 18,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    padding: 0,
+                    background: 'none',
+                    border: 'none',
+                    color: 'var(--text-dim)',
+                    cursor: 'pointer',
+                  }}
+                >
+                  ×
+                </button>
+              )}
+            </div>
+            {sessionListSection}
+          </div>
+        )
+      case 'skills':
+        return (
+          <div style={{ flex: '1 1 0', overflowY: 'auto', padding: '0', minHeight: 80 }}>
+            <div style={{ padding: '0 10px' }}>
+              <div
+                onClick={() => setSkillsCollapsed((v) => !v)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  padding: '10px 0 8px',
+                  cursor: 'pointer',
+                  userSelect: 'none',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ fontSize: 'var(--font-sm)', fontWeight: 600, color: 'var(--text)' }}>技能库</span>
+                  <span style={{
+                    padding: '1px 6px',
+                    borderRadius: 'var(--radius-xs)',
+                    background: 'var(--bg-hover)',
+                    fontSize: 'var(--font-xs)',
+                    color: 'var(--text-muted)',
+                  }}>
+                    {SKILLS.length}
+                  </span>
+                </div>
+                <svg
+                  width="10"
+                  height="10"
+                  viewBox="0 0 10 10"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  style={{
+                    color: 'var(--text-dim)',
+                    transform: skillsCollapsed ? 'rotate(-90deg)' : 'none',
+                    transition: 'transform 0.15s',
+                  }}
+                >
+                  <polyline points="2 3.5 5 6.5 8 3.5" />
+                </svg>
+              </div>
+              {!skillsCollapsed && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '4px 0 8px' }}>
+                  {SKILLS.map((skill) => (
+                    <SkillCard key={skill.id} skill={skill} />
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )
+      default:
+        return null
     }
   }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
-      {/* Header */}
       <div style={{ padding: '12px 10px 10px', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-          <PiAgentTitle />
-          <div style={{ display: 'flex', gap: 6 }}>
-            <button
-              onClick={() => {
-                if (!selectedCwd) {
-                  setDropdownOpen(true)
-                  cwdButtonRef.current?.focus()
-                  return
-                }
-                onNewSession()
-              }}
-              className="btn-text"
-              title={selectedCwd ? '在当前项目中新建对话' : '请先选择项目目录'}
-            >
-              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
-                <line x1="6" y1="1" x2="6" y2="11" />
-                <line x1="1" y1="6" x2="11" y2="6" />
-              </svg>
-              新建对话
-            </button>
+        <PiAgentTitle />
+      </div>
 
-          </div>
-        </div>
-
-        {/* Search */}
-        <div style={{ marginTop: 10, marginBottom: 8, position: 'relative' }}>
-          <svg
-            width="12"
-            height="12"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="var(--text-dim)"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            style={{ position: 'absolute', left: 9, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }}
-          >
-            <circle cx="11" cy="11" r="8" />
-            <line x1="21" y1="21" x2="16.65" y2="16.65" />
-          </svg>
-          <input
-            ref={searchRef}
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="搜索会话..."
-            style={{
-              width: '100%',
-              padding: '6px 10px 6px 28px',
-              background: 'var(--bg)',
-              border: '1px solid var(--border)',
-              borderRadius: 'var(--radius-sm)',
-              color: 'var(--text)',
-              fontSize: 'var(--font-sm)',
-              outline: 'none',
-            }}
-          />
-          {search && (
-            <button
-              onClick={() => { setSearch(''); searchRef.current?.focus() }}
-              style={{
-                position: 'absolute',
-                right: 6,
-                top: '50%',
-                transform: 'translateY(-50%)',
-                width: 18,
-                height: 18,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                padding: 0,
-                background: 'none',
-                border: 'none',
-                color: 'var(--text-dim)',
-                cursor: 'pointer',
-              }}
-            >
-              ×
-            </button>
-          )}
-        </div>
-
-        {/* CWD picker */}
-        <div ref={dropdownRef} style={{ position: 'relative' }}>
-          <button
-            ref={cwdButtonRef}
-            onClick={() => setDropdownOpen((v) => !v)}
-            style={{
-              width: '100%',
-              display: 'flex',
-              alignItems: 'center',
-              padding: '6px 10px',
-              background: selectedCwd ? 'var(--bg-hover)' : 'var(--user-bg)',
-              border: selectedCwd ? '1px solid var(--border)' : '1px dashed var(--accent)',
-              borderRadius: 'var(--radius-sm)',
-              cursor: 'pointer',
-              fontSize: 'var(--font-sm)',
-              color: 'var(--text)',
-              textAlign: 'left',
-              transition: 'border-color 0.15s, background 0.15s',
-            }}
-          >
-            <span
-              style={{
-                flex: 1,
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
-                fontFamily: 'var(--font-mono)',
-                fontSize: 'var(--font-xs)',
-                color: selectedCwd ? 'var(--text)' : 'var(--text-dim)',
-              }}
-              title={selectedCwd ?? ''}
-            >
-              {selectedCwd ? shortenCwd(selectedCwd) : '选择项目...'}
-            </span>
-          </button>
-
-          {dropdownOpen && (
+      <div style={{ padding: '8px 10px', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
+        {navItems.map((item) => {
+          const isActive = item.id === activeNav
+          const baseStyle: React.CSSProperties = {
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            padding: '8px 10px',
+            borderRadius: 'var(--radius-sm)',
+            cursor: 'pointer',
+            fontSize: 'var(--font-sm)',
+            color: 'var(--text)',
+            transition: 'background 0.1s, color 0.1s',
+            borderLeft: '2px solid transparent',
+          }
+          const activeStyle: React.CSSProperties = isActive
+            ? {
+                marginLeft: -10,
+                paddingLeft: 18,
+                background: 'var(--bg-selected)',
+                color: 'var(--accent)',
+                borderLeft: '2px solid var(--accent)',
+              }
+            : {}
+          return (
             <div
-              style={{
-                position: 'absolute',
-                top: 'calc(100% + 4px)',
-                left: 0,
-                right: 0,
-                zIndex: 100,
-                background: 'var(--bg)',
-                border: '1px solid var(--border)',
-                borderRadius: 'var(--radius-md)',
-                boxShadow: 'var(--shadow-md)',
-                overflow: 'hidden',
+              key={item.id}
+              onClick={() => {
+                if (item.id === 'new') {
+                  onNewSession()
+                  setActiveNav('new')
+                } else {
+                  setActiveNav(item.id as NavId)
+                }
               }}
+              style={{ ...baseStyle, ...activeStyle }}
             >
-              {recentCwds.map((cwd) => (
-                <button
-                  key={cwd}
-                  onClick={() => {
-                    onCwdChange(cwd)
-                    setDropdownOpen(false)
-                  }}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 7,
-                    width: '100%',
-                    padding: '8px 10px',
-                    background: cwd === selectedCwd ? 'var(--bg-selected)' : 'none',
-                    border: 'none',
-                    borderBottom: '1px solid var(--border)',
-                    color: cwd === selectedCwd ? 'var(--text)' : 'var(--text-muted)',
-                    cursor: 'pointer',
-                    textAlign: 'left',
-                    fontSize: 'var(--font-xs)',
-                    fontFamily: 'var(--font-mono)',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
-                  }}
-                  title={cwd}
-                >
-                  {cwd === selectedCwd && (
-                    <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
-                      <polyline points="1.5 5 4 7.5 8.5 2.5" />
-                    </svg>
-                  )}
-                  {cwd !== selectedCwd && <span style={{ width: 10, flexShrink: 0 }} />}
-                  <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {shortenCwd(cwd)}
-                  </span>
-                </button>
-              ))}
-              <button
-                onClick={handleCustomPath}
-                disabled={selectingDirectory}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 7,
-                  width: '100%',
-                  padding: '8px 10px',
-                  background: 'none',
-                  border: 'none',
-                  color: 'var(--text-muted)',
-                  cursor: selectingDirectory ? 'wait' : 'pointer',
-                  textAlign: 'left',
-                  fontSize: 'var(--font-xs)',
-                }}
-              >
-                <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" style={{ flexShrink: 0 }}>
-                  <line x1="5" y1="1" x2="5" y2="9" />
-                  <line x1="1" y1="5" x2="9" y2="5" />
-                </svg>
-                <span>{selectingDirectory ? '正在打开...' : '自定义路径...'}</span>
-              </button>
+              <span style={{ width: 20, textAlign: 'center', flexShrink: 0 }}>{item.icon}</span>
+              <span>{item.label}</span>
             </div>
-          )}
-        </div>
-        {directoryError && (
-          <div style={{ marginTop: 6, color: 'var(--danger)', fontSize: 'var(--font-xs)', lineHeight: 1.4 }}>
-            {directoryError}
-          </div>
-        )}
+          )
+        })}
       </div>
 
-      {/* Session list */}
-      <div style={{ flex: '1 1 0', overflowY: 'auto', padding: '0', minHeight: 80 }}>
-        {sessionsLoading && (
-          <div style={{ padding: '12px 10px', display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {[...Array(5)].map((_, i) => (
-              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px' }}>
-                <div style={{ width: 22, height: 22, borderRadius: 'var(--radius-sm)', background: 'var(--bg-hover)', animation: 'shimmer 1.5s ease-in-out infinite' }} />
-                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 4 }}>
-                  <div style={{ width: '60%', height: 10, borderRadius: 'var(--radius-xs)', background: 'var(--bg-hover)', animation: 'shimmer 1.5s ease-in-out infinite', animationDelay: `${i * 80}ms` }} />
-                  <div style={{ width: '40%', height: 8, borderRadius: 'var(--radius-xs)', background: 'var(--bg-hover)', animation: 'shimmer 1.5s ease-in-out infinite', animationDelay: `${i * 80 + 40}ms` }} />
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-        {!sessionsLoading && filteredSessions.length === 0 && (
-          <div style={{ padding: '28px 16px', textAlign: 'center', color: 'var(--text-muted)' }}>
-            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ margin: '0 auto 10px', opacity: 0.5 }}>
-              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-            </svg>
-            <div style={{ fontSize: 'var(--font-sm)', fontWeight: 500, marginBottom: 4, color: 'var(--text)' }}>
-              {sessionLoadError ? '暂时连接不上' : '暂无会话'}
-            </div>
-            <div style={{ fontSize: 'var(--font-xs)', lineHeight: 1.5, marginBottom: sessionLoadError ? 10 : 0 }}>
-              {sessionLoadError
-                ? '还没连上超级小金服务。请检查服务是否已启动、地址和密码是否填对。'
-                : '点击上方「新建对话」开始'}
-            </div>
-            {sessionLoadError && onRefreshSessions && (
-              <button
-                onClick={onRefreshSessions}
-                disabled={sessionsLoading}
-                className="btn-sidebar-reload"
-                style={{ cursor: sessionsLoading ? 'wait' : 'pointer' }}
-              >
-                {sessionsLoading ? '正在刷新…' : '重新加载'}
-              </button>
-            )}
-          </div>
-        )}
-        {!sessionsLoading && sessionTree.map((node) => (
-          <SessionTreeItem
-            key={node.session.id}
-            node={node}
-            selectedId={selectedId}
-            onSelectSession={onSelectSession}
-            onDeleteSession={onDeleteSession}
-            onRenameSession={onRenameSession}
-            onPinSession={onPinSession}
-            pinnedIds={pinnedIds}
-            depth={0}
-            onToast={onToast}
-          />
-        ))}
+      {renderContent()}
+    </div>
+  )
+}
+
+function SkillCard({ skill }: { skill: SkillDef }) {
+  const [enabled, setEnabled] = useState(false)
+  return (
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 10,
+        padding: '10px',
+        background: 'var(--bg-hover)',
+        borderRadius: 'var(--radius-sm)',
+        cursor: 'pointer',
+      }}
+      onClick={() => setEnabled((v) => !v)}
+    >
+      <span style={{ fontSize: 16, flexShrink: 0 }}>🧩</span>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 'var(--font-sm)', fontWeight: 500, color: 'var(--text)' }}>{skill.name}</div>
+        <div style={{ fontSize: 'var(--font-xs)', color: 'var(--text-muted)', marginTop: 2 }}>{skill.desc}</div>
       </div>
-
-
-      {/* Bottom Skills button */}
-      <div style={{ padding: '8px', flexShrink: 0, borderTop: '1px solid var(--border)' }}>
-        <button
-          title="技能库"
-          onClick={() => onOpenSkills?.()}
-          className="btn-sidebar-footer"
-        >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M12 2L2 7l10 5 10-5-10-5z" />
-            <path d="M2 17l10 5 10-5" />
-            <path d="M2 12l10 5 10-5" />
-          </svg>
-          技能库
-        </button>
+      <div
+        style={{
+          width: 34,
+          height: 18,
+          borderRadius: 9,
+          background: enabled ? 'var(--accent)' : 'var(--border)',
+          position: 'relative',
+          transition: 'background 0.2s',
+          flexShrink: 0,
+        }}
+      >
+        <div
+          style={{
+            position: 'absolute',
+            left: enabled ? 17 : 3,
+            top: 2,
+            width: 14,
+            height: 14,
+            borderRadius: '50%',
+            background: '#fff',
+            transition: 'left 0.2s',
+          }}
+        />
       </div>
     </div>
   )
@@ -544,7 +575,6 @@ function formatSessionToMarkdown(session: SessionInfo, messages: WebMessage[]): 
     lines.push(`## ${idx + 1}. ${speaker}`)
     lines.push('')
     if (message.content) {
-      // 用围栏代码块包裹消息原文，避免内容中的 Markdown 特殊字符破坏整体结构，同时保留原文格式。
       lines.push('```')
       lines.push(message.content)
       lines.push('```')
@@ -866,15 +896,8 @@ function SessionItem({ session, isSelected, onClick, onDelete, onRename, onPin, 
             </span>
           )}
         </div>
-        <div style={{
-          marginTop: 1, fontSize: 'var(--sidebar-path-size, 10px)', color: 'var(--text-dim)',
-          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-        }}>
-          {shortenCwd(session.cwd)}
-        </div>
       </div>
 
-      {/* Three-dot menu */}
       <div ref={menuRef} style={{ position: 'relative', flexShrink: 0 }}>
         {(hovered || menuOpen) && !editing && (
           <button
@@ -998,7 +1021,7 @@ function SessionItem({ session, isSelected, onClick, onDelete, onRename, onPin, 
         </button>
       )}
     </div>
-)
+  )
 }
 
 const MAX_SHARE_BYTES = 2 * 1024 * 1024

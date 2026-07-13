@@ -4,19 +4,15 @@ import { ChatArea } from './components/ChatArea'
 import type { SessionInfo } from './mockData'
 import { ChatInput, type ChatInputHandle } from './components/ChatInput'
 import { SettingsPanel } from './components/SettingsPanel'
-import { SkillsPanel } from './components/SkillsPanel'
 import { Typewriter } from './components/Typewriter'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import {
-  listSessions, listRecentPaths, addRecentPath, deleteSession, renameSession,
-  listLocalSkills, listModels, getConfig, switchModel,
-  type ModelProviderInfo,
-  type ConfigInfo,
+  listSessions, deleteSession, renameSession, getStoredServerUrl, setStoredServerUrl,
 } from './lib/piApi'
 import { upsertSession } from './lib/sessionState'
 
 function pickDefaultServerUrl(): string {
-  return '/superking-api'
+  return 'http://127.0.0.1:3000'
 }
 
 const APP_INSTITUTION = (import.meta.env.VITE_APP_INSTITUTION as string | undefined) ?? `v${__APP_VERSION__}`
@@ -46,18 +42,7 @@ export default function App() {
   const [sessionLoadError, setSessionLoadError] = useState<string | null>(null)
   const [sessionsLoading, setSessionsLoading] = useState(false)
   const [selectedSession, setSelectedSession] = useState<SessionInfo | null>(null)
-  const [selectedCwd, setSelectedCwd] = useState<string | null>(null)
-  const [recentCwds, setRecentCwds] = useState<string[]>([])
-  useEffect(() => {
-    listRecentPaths()
-      .then((paths) => setRecentCwds(paths.map((p) => p.path)))
-      .catch(() => {})
-  }, [])
-
-  // 预加载本地 Skills 到缓存，打开 Skills 面板时可立即显示
-  useEffect(() => {
-    listLocalSkills().catch(() => {})
-  }, [])
+  const [selectedCwd] = useState<string | null>('E:\\\\SuperkingBackend')
 
   const [newSessionCwd, setNewSessionCwd] = useState<string | null>(null)
   const [sidebarOpen, setSidebarOpen] = useState(true)
@@ -79,26 +64,14 @@ export default function App() {
     try { const v = localStorage.getItem('pi-mode'); return v === 'senior' ? 'senior' : 'young' } catch { return 'young' }
   })
   const [settingsOpen, setSettingsOpen] = useState(false)
-  const [skillsOpen, setSkillsOpen] = useState(false)
   const [toast, setToast] = useState<{ message: string; type?: 'success' | 'error' } | null>(null)
   const [serverUrl, setServerUrl] = useState(() => {
     try {
-      const saved = localStorage.getItem('pi-server-url')
+      const saved = getStoredServerUrl()
       const fallback = pickDefaultServerUrl()
       return saved || (import.meta.env.VITE_PI_API_BASE as string | undefined) || fallback
     } catch { return pickDefaultServerUrl() }
   })
-  const [password, setPassword] = useState(() => {
-    try { return localStorage.getItem('pi-server-password') || '' } catch { return '' }
-  })
-  const [localHelperUrl, setLocalHelperUrl] = useState(() => {
-    try { return localStorage.getItem('pi-local-helper-url') || (import.meta.env.VITE_LOCAL_HELPER_BASE as string | undefined) || 'http://127.0.0.1:30143' } catch { return 'http://127.0.0.1:30143' }
-  })
-  const [autoApproveAllTools, setAutoApproveAllToolsState] = useState<boolean>(() => {
-    try { return localStorage.getItem('pi-auto-approve-all-tools') === '1' } catch { return false }
-  })
-  const [modelProviders, setModelProviders] = useState<ModelProviderInfo[]>([])
-  const [config, setConfig] = useState<ConfigInfo | null>(null)
   const [pinnedIds, setPinnedIds] = useState<Set<string>>(() => {
     try {
       const raw = localStorage.getItem('pi-pinned-sessions')
@@ -129,34 +102,10 @@ export default function App() {
   }, [fontSize])
 
   useEffect(() => {
-    localStorage.setItem('pi-server-url', serverUrl)
+    setStoredServerUrl(serverUrl)
   }, [serverUrl])
 
-  useEffect(() => {
-    localStorage.setItem('pi-server-password', password)
-  }, [password])
-
-  useEffect(() => {
-    localStorage.setItem('pi-local-helper-url', localHelperUrl)
-  }, [localHelperUrl])
-
-  const setAutoApproveAllTools = useCallback((v: boolean) => {
-    setAutoApproveAllToolsState(v)
-    try { localStorage.setItem('pi-auto-approve-all-tools', v ? '1' : '0') } catch {}
-  }, [])
-
   // 加载模型列表与全局配置
-  useEffect(() => {
-    let cancelled = false
-    Promise.all([
-      listModels().then((providers) => { if (!cancelled) setModelProviders(providers) }),
-      getConfig().then((cfg) => { if (!cancelled) setConfig(cfg) }),
-    ]).catch((err) => {
-      console.error('Failed to load models/config:', err)
-    })
-    return () => { cancelled = true }
-  }, [serverUrl, password])
-
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 'b') {
@@ -170,62 +119,28 @@ export default function App() {
 
   const loadSessionsForCwd = useCallback((cwd: string | null) => {
     let cancelled = false
-    // 密码还没就位时：不发请求，不显示「连接失败」红字，
-    // 等 hydration effect 把密码灌进来后会通过 useEffect 依赖自动重试。
-    if (!password) {
-      setSessions([])
-      setSessionLoadError(null)
-      setSessionsLoading(false)
-      return () => { cancelled = true }
-    }
     setSessionsLoading(true)
     listSessions(cwd ?? undefined)
       .then((loaded) => {
         if (cancelled) return
         setSessions(loaded)
         setSessionLoadError(null)
-        // 注意：故意不在这里 setSelectedSession(null) / setSelectedCwd(cwd) —— 
-        // handleCwdChange 已经负责切目录时的状态重置；如果在这里再清一遍，
-        // 用户点击某个会话会触发 effect 重跑 loadSessions 时把刚选中的会话清掉。
-        // 把所有会话里出现过的 cwd 合并进 recentCwds，让首次启动的用户
-        // 立刻在「选择项目」下拉里看到历史项目目录（不用等用户手动添加）。
-        // 同时持久化到 localStorage，下次启动直接可见。
-        const cwdsFromSessions = Array.from(
-          new Set(loaded.map((s) => s.cwd).filter((c): c is string => !!c))
-        )
-        if (cwdsFromSessions.length > 0) {
-          setRecentCwds((prev) => {
-            const merged = Array.from(new Set([...prev, ...cwdsFromSessions]))
-            return merged.length === prev.length ? prev : merged
-          })
-          // 异步持久化每一个 —— addRecentPath 内部会去重并维护最新顺序
-          Promise.all(cwdsFromSessions.map((c) => addRecentPath(c)))
-            .then((results) => {
-              if (cancelled) return
-              // 取最后一次调用返回的完整列表（包含所有 cwds，因为是叠加写）
-              const last = results[results.length - 1]
-              if (last) setRecentCwds(last.map((p) => p.path))
-            })
-            .catch(() => {})
-        }
       })
       .catch((error) => {
         if (cancelled) return
         setSessions([])
-        setSessionLoadError(error instanceof Error ? error.message : '无法连接真实 Pi SDK 后端')
+        setSessionLoadError(error instanceof Error ? error.message : '无法连接 Super-King 后端')
       })
       .finally(() => {
         if (!cancelled) setSessionsLoading(false)
       })
     return () => { cancelled = true }
-  }, [password, serverUrl])
+  }, [serverUrl])
 
-  // 依赖 password/serverUrl：用户在设置面板改了密码/地址，立即重试连接，
-  // 不需要切目录、不需要刷新整个 App。
+  // 依赖 serverUrl：用户在设置面板改了地址，立即重试连接，不需要切目录。
   useEffect(() => loadSessionsForCwd(selectedCwd), [loadSessionsForCwd, selectedCwd])
 
-  // 连接失败后自动重试：用户可能正在启动 super-king，
-  // 每隔 5 秒刷新一次会话列表，直到连接成功。
+  // 连接失败后自动重试：用户可能正在启动 super-king，每隔 5 秒刷新一次会话列表。
   const refreshSessions = useCallback(() => loadSessionsForCwd(selectedCwd), [loadSessionsForCwd, selectedCwd])
   useEffect(() => {
     if (!sessionLoadError) return
@@ -238,35 +153,11 @@ export default function App() {
   const handleSelectSession = useCallback((session: SessionInfo) => {
     setNewSessionCwd(null)
     setSelectedSession(session)
-    // 点了某个会话 -> 同步把 selectedCwd 设为该会话的 cwd，
-    // 让左上角 CWD picker 立刻显示当前项目目录（之前会一直显示「选择项目...」）。
-    if (session.cwd) {
-      setSelectedCwd((prev) => (prev === session.cwd ? prev : session.cwd))
-      // 顺手写进 recentCwds，确保下次启动也能在下拉里看到
-      addRecentPath(session.cwd)
-        .then((paths) => setRecentCwds(paths.map((p) => p.path)))
-        .catch(() => {})
-    }
   }, [])
 
   const handleNewSession = useCallback(() => {
-    if (!selectedCwd) return
     setSelectedSession(null)
     setNewSessionCwd(selectedCwd)
-  }, [selectedCwd])
-
-  const handleCwdChange = useCallback((cwd: string | null) => {
-    if (cwd === selectedCwd) return
-    setSelectedCwd(cwd)
-    setSessions([])
-    setSessionLoadError(null)
-    setSelectedSession(null)
-    setNewSessionCwd(cwd)
-    if (cwd) {
-      addRecentPath(cwd)
-        .then((paths) => setRecentCwds(paths.map((p) => p.path)))
-      .catch((err) => { console.error('Failed to load recent paths:', err) })
-    }
   }, [selectedCwd])
 
   const handleSessionCreated = useCallback((session: SessionInfo) => {
@@ -309,17 +200,6 @@ export default function App() {
     }
   }, [selectedSession, selectedCwd])
 
-  const handleSwitchModel = useCallback(async (sessionId: string, provider: string, modelId: string) => {
-    try {
-      await switchModel(sessionId, provider, modelId)
-      const updated: Partial<SessionInfo> = { model: { provider, modelId } }
-      setSessions((current) => current.map((s) => s.id === sessionId ? { ...s, ...updated } : s))
-      setSelectedSession((current) => current?.id === sessionId ? { ...current, ...updated } : current)
-    } catch (err) {
-      setToast({ message: '切换模型失败：' + (err instanceof Error ? err.message : String(err)), type: 'error' })
-    }
-  }, [])
-
   const showChat = selectedSession !== null || newSessionCwd !== null
 
   return (
@@ -348,12 +228,8 @@ export default function App() {
               onRenameSession={handleRenameSession}
               onPinSession={handlePinSession}
               pinnedIds={pinnedIds}
-              selectedCwd={selectedCwd}
-              recentCwds={recentCwds}
-              onCwdChange={handleCwdChange}
               sessionLoadError={sessionLoadError}
               sessionsLoading={sessionsLoading}
-              onOpenSkills={() => setSkillsOpen(true)}
               onToast={(message, type) => setToast({ message, type })}
               onRefreshSessions={refreshSessions}
             />
@@ -426,10 +302,6 @@ export default function App() {
                 newSessionCwd={newSessionCwd}
                 chatInputRef={chatInputRef}
                 onSessionCreated={handleSessionCreated}
-                modelProviders={modelProviders}
-                config={config}
-                onSwitchModel={handleSwitchModel}
-                autoApproveAllTools={autoApproveAllTools}
               />
             ) : (
               <div style={{ flex: 1, display: 'flex', flexDirection: 'column', height: '100%', background: 'var(--bg)', overflow: 'hidden' }}>
@@ -462,8 +334,8 @@ export default function App() {
                     </div>
                     <ChatInput
                       ref={chatInputRef}
-                      placeholder="先选择项目目录后即可开始对话..."
-                      onSend={() => setToast({ message: '请先从左侧选择项目目录', type: 'error' })}
+                      placeholder="开始对话..."
+                      onSend={() => setToast({ message: '请先从左侧新建或选择会话', type: 'error' })}
                     />
                   </div>
                 </div>
@@ -472,12 +344,6 @@ export default function App() {
           </div>
         </div>
       </div>
-      {skillsOpen && (
-        <SkillsPanel
-          cwd={selectedCwd}
-          onClose={() => setSkillsOpen(false)}
-        />
-      )}
       {settingsOpen && (
         <SettingsPanel
           isDark={isDark}
@@ -488,12 +354,6 @@ export default function App() {
           onModeChange={setMode}
           serverUrl={serverUrl}
           onServerUrlChange={setServerUrl}
-          password={password}
-          onPasswordChange={setPassword}
-          localHelperUrl={localHelperUrl}
-          onLocalHelperUrlChange={setLocalHelperUrl}
-          autoApproveAllTools={autoApproveAllTools}
-          onAutoApproveAllToolsChange={setAutoApproveAllTools}
           onClose={() => setSettingsOpen(false)}
         />
       )}
