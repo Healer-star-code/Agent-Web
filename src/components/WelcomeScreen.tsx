@@ -1,6 +1,7 @@
 import { motion, type Variants } from 'framer-motion'
 import { ChatInput, type ChatInputHandle } from './ChatInput'
 import { Typewriter } from './Typewriter'
+import { XiaojinLogo } from './XiaojinLogo'
 import { FileText, Code, BookOpen, Sparkle } from '@phosphor-icons/react'
 
 const TYPEWRITER_PHRASES = [
@@ -40,19 +41,20 @@ const item: Variants = {
   },
 }
 
-const bentoContainer: Variants = {
+const visualContainer: Variants = {
   hidden: { opacity: 0 },
   visible: {
     opacity: 1,
-    transition: { staggerChildren: 0.1, delayChildren: 0.25 },
+    transition: { staggerChildren: 0.12, delayChildren: 0.2 },
   },
 }
 
-const bentoItem: Variants = {
-  hidden: { opacity: 0, scale: 0.96 },
+const visualItem: Variants = {
+  hidden: { opacity: 0, scale: 0.9, y: 20 },
   visible: {
     opacity: 1,
     scale: 1,
+    y: 0,
     transition: { type: 'spring', stiffness: 120, damping: 18 },
   },
 }
@@ -65,7 +67,7 @@ interface Props {
 
 export function WelcomeScreen({ chatInputRef, onSend, institution }: Props) {
   return (
-    <div className="min-h-full flex flex-col lg:flex-row items-center justify-center gap-12 lg:gap-20 px-6 py-12 lg:px-20 overflow-hidden bg-app-bg">
+    <div className="min-h-full flex flex-col lg:flex-row items-center justify-center gap-12 lg:gap-16 px-6 py-12 lg:px-20 overflow-hidden bg-app-bg">
       <motion.div
         className="flex-1 w-full max-w-2xl"
         variants={container}
@@ -108,47 +110,84 @@ export function WelcomeScreen({ chatInputRef, onSend, institution }: Props) {
       </motion.div>
 
       <motion.div
-        className="hidden lg:flex flex-1 w-full max-w-lg items-center justify-center"
-        variants={bentoContainer}
+        className="hidden lg:flex flex-1 w-full max-w-xl items-center justify-center"
+        variants={visualContainer}
         initial="hidden"
         animate="visible"
       >
-        <div className="grid grid-cols-2 gap-4 w-full">
+        <div className="relative w-full max-w-md aspect-square flex items-center justify-center">
+          {/* Background gradient blob */}
           <motion.div
-            variants={bentoItem}
-            className="col-span-2 p-6 rounded-[2.5rem] bg-app-panel border border-app-border/50 shadow-diffusion"
+            variants={visualItem}
+            className="absolute inset-0 rounded-full opacity-60 blur-3xl"
+            style={{
+              background: 'radial-gradient(circle at 40% 40%, color-mix(in srgb, var(--accent) 22%, transparent), transparent 60%)',
+            }}
+            animate={{ scale: [1, 1.08, 1], opacity: [0.5, 0.7, 0.5] }}
+            transition={{ duration: 8, repeat: Infinity, ease: 'easeInOut' }}
+          />
+
+          {/* Rotating ring */}
+          <motion.div
+            className="absolute w-[78%] h-[78%] rounded-full border border-app-border/40"
+            animate={{ rotate: 360 }}
+            transition={{ duration: 24, repeat: Infinity, ease: 'linear' }}
           >
-            <div className="flex items-center gap-3 mb-3">
-              <div className="w-10 h-10 rounded-xl bg-accent-bg flex items-center justify-center text-accent">
-                <BookOpen weight="duotone" size={22} />
+            <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-2 h-2 rounded-full bg-accent/60" />
+            <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2 h-2 rounded-full bg-accent/40" />
+          </motion.div>
+
+          <motion.div
+            className="absolute w-[62%] h-[62%] rounded-full border border-dashed border-app-border/30"
+            animate={{ rotate: -360 }}
+            transition={{ duration: 32, repeat: Infinity, ease: 'linear' }}
+          />
+
+          {/* Floating logo */}
+          <motion.div
+            variants={visualItem}
+            className="relative z-10"
+            animate={{ y: [0, -10, 0] }}
+            transition={{ duration: 5, repeat: Infinity, ease: 'easeInOut' }}
+          >
+            <XiaojinLogo size={140} />
+          </motion.div>
+
+          {/* Floating capability cards */}
+          <motion.div
+            variants={visualItem}
+            className="absolute top-8 right-0 p-3 rounded-2xl bg-app-panel/80 border border-app-border/50 shadow-diffusion backdrop-blur-sm"
+          >
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-lg bg-accent-bg flex items-center justify-center text-accent">
+                <BookOpen weight="duotone" size={18} />
               </div>
-              <div className="text-sm font-semibold text-text">智能备课</div>
-            </div>
-            <div className="text-sm text-text-muted leading-relaxed">
-              输入课程主题，自动生成教学目标、板书设计与课后作业。
+              <div className="text-xs font-medium text-text">智能备课</div>
             </div>
           </motion.div>
 
           <motion.div
-            variants={bentoItem}
-            className="p-5 rounded-[2rem] bg-app-panel border border-app-border/50 shadow-diffusion"
+            variants={visualItem}
+            className="absolute bottom-16 left-0 p-3 rounded-2xl bg-app-panel/80 border border-app-border/50 shadow-diffusion backdrop-blur-sm"
           >
-            <div className="w-9 h-9 rounded-xl bg-[var(--accent-senior-bg)] flex items-center justify-center text-[var(--accent-senior)] mb-3">
-              <FileText weight="duotone" size={20} />
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-lg bg-[var(--accent-senior-bg)] flex items-center justify-center text-[var(--accent-senior)]">
+                <FileText weight="duotone" size={18} />
+              </div>
+              <div className="text-xs font-medium text-text">文档处理</div>
             </div>
-            <div className="text-sm font-semibold text-text mb-1">文档处理</div>
-            <div className="text-xs text-text-muted">Word / PDF / PPT 一键生成</div>
           </motion.div>
 
           <motion.div
-            variants={bentoItem}
-            className="p-5 rounded-[2rem] bg-app-panel border border-app-border/50 shadow-diffusion"
+            variants={visualItem}
+            className="absolute bottom-4 right-8 p-3 rounded-2xl bg-app-panel/80 border border-app-border/50 shadow-diffusion backdrop-blur-sm"
           >
-            <div className="w-9 h-9 rounded-xl bg-[var(--warning-bg)] flex items-center justify-center text-[var(--warning)] mb-3">
-              <Code weight="duotone" size={20} />
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-lg bg-[var(--warning-bg)] flex items-center justify-center text-[var(--warning)]">
+                <Code weight="duotone" size={18} />
+              </div>
+              <div className="text-xs font-medium text-text">代码审查</div>
             </div>
-            <div className="text-sm font-semibold text-text mb-1">代码审查</div>
-            <div className="text-xs text-text-muted">读懂代码库，定位 bug</div>
           </motion.div>
         </div>
       </motion.div>
