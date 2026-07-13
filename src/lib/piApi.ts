@@ -388,10 +388,20 @@ function truncateForUi(value: unknown, limit: number): unknown {
   return value.slice(0, limit) + `\n…（已省略 ${value.length - limit} 字符以保护渲染性能）`
 }
 
-function extractTextAndThinking(content: SuperKingContent[]): { text: string; thinking: string } {
+// v0.80 后端在不同接口返回的 content 格式可能不同：SSE 事件通常是数组，
+// 但 /sessions/:id/messages 可能直接返回字符串。统一标准化为数组格式。
+function normalizeContent(content: unknown): SuperKingContent[] {
+  if (Array.isArray(content)) return content as SuperKingContent[]
+  if (typeof content === 'string') return [{ type: 'text', text: content }]
+  if (content && typeof content === 'object') return [content as SuperKingContent]
+  return []
+}
+
+function extractTextAndThinking(content: SuperKingContent[] | string | unknown): { text: string; thinking: string } {
+  const normalized = normalizeContent(content)
   let text = ''
   let thinking = ''
-  for (const c of content) {
+  for (const c of normalized) {
     if (c.type === 'text') text += c.text
     if (c.type === 'thinking') thinking += c.thinking
   }
@@ -494,7 +504,7 @@ export function connectSessionEvents(sessionId: string, onEvent: (event: WebAgen
     switch (eventType) {
       case 'message_start': {
         const message = data.message as SuperKingMessage | undefined
-        if (!message || message.role === 'toolResult') return
+        if (!message || message.role !== 'assistant') return
         ensureTurnStarted()
         const content = message.content ?? []
         const { text, thinking } = extractTextAndThinking(content)
@@ -540,7 +550,18 @@ export function connectSessionEvents(sessionId: string, onEvent: (event: WebAgen
             break
           case 'text_delta':
             if (typeof assistantEvent.delta === 'string') {
-              emitTextDelta(assistantEvent.delta)
+              const current = state.assistantText
+              const delta = assistantEvent.delta
+              // 防止后端把 message_start 已给过的完整文本又从 text_delta 重放一遍
+              if (current === delta) {
+                // 完全重复，跳过
+              } else if (delta.startsWith(current) && current.length > 0) {
+                // delta 已包含 current，只取新增部分
+                const actualDelta = delta.slice(current.length)
+                if (actualDelta) emitTextDelta(actualDelta)
+              } else {
+                emitTextDelta(delta)
+              }
             }
             break
           case 'text_end':
@@ -645,8 +666,11 @@ function convertSuperKingMessages(messages: SuperKingMessage[], cwd?: string): W
     return null
   }
 
-  function extractText(content: SuperKingContent[]): string {
-    return content.filter((c): c is { type: 'text'; text: string } => c.type === 'text').map((c) => c.text).join('')
+  function extractText(content: SuperKingContent[] | string | unknown): string {
+    return normalizeContent(content)
+      .filter((c): c is { type: 'text'; text: string } => c.type === 'text')
+      .map((c) => c.text)
+      .join('')
   }
 
   for (const msg of messages) {
@@ -673,7 +697,7 @@ function convertSuperKingMessages(messages: SuperKingMessage[], cwd?: string): W
       artifacts: [],
     }
 
-    for (const c of msg.content) {
+    for (const c of normalizeContent(msg.content)) {
       if (c.type === 'text') webMsg.content += c.text
       if (c.type === 'thinking') webMsg.thinkingContent += c.thinking
       if (c.type === 'toolCall') {

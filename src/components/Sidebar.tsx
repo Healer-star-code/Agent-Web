@@ -150,6 +150,7 @@ export function Sidebar({ sessions, selectedId, onSelectSession, onNewSession, s
   useEffect(() => {
     if (selectedId && activeNav === 'new') {
       setActiveNav('chat')
+      setSessionsCollapsed(false)
     }
   }, [selectedId, activeNav])
 
@@ -443,8 +444,20 @@ export function Sidebar({ sessions, selectedId, onSelectSession, onNewSession, s
                 if (item.id === 'new') {
                   onNewSession()
                   setActiveNav('new')
+                  setSessionsCollapsed(false)
                 } else {
                   setActiveNav(item.id as NavId)
+                  if (item.id === 'chat') {
+                    setSessionsCollapsed(false)
+                    // 切到历史对话时，如果没有选中任何会话，自动打开最新一条，
+                    // 避免主界面一直停留在初始空白页。
+                    if (!selectedId && sessions.length > 0) {
+                      const latest = sessions.reduce((a, b) =>
+                        a.modified > b.modified ? a : b
+                      )
+                      onSelectSession(latest)
+                    }
+                  }
                 }
               }}
               style={{ ...baseStyle, ...activeStyle }}

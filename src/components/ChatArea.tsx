@@ -370,6 +370,7 @@ export function ChatArea({ session, selectedCwd, newSessionCwd, chatInputRef, on
       clearTimeout(fallbackScanTimerRef.current)
       fallbackScanTimerRef.current = null
     }
+    const existing = sessionStatesRef.current.get(sessionId)
     const state: ChatSessionState = {
       messages: messagesRef.current,
       hasMessages,
@@ -396,7 +397,10 @@ export function ChatArea({ session, selectedCwd, newSessionCwd, chatInputRef, on
       normalizeSessionId: normalizeSessionIdRef.current,
       scannedForArtifacts: new Map(scannedForArtifactsRef.current),
       fallbackScanTimer: null,
-      loaded: true,
+      // 关键：不能无条件把 loaded 设成 true。如果会话还没从后端加载完（比如 React
+      // StrictMode 导致 effect cleanup 提前触发），保存成 loaded=true 会让后续
+      // 恢复直接拿空的缓存，导致历史记录空白。
+      loaded: existing?.loaded ?? false,
     }
     sessionStatesRef.current.set(sessionId, state)
   }
@@ -508,6 +512,17 @@ export function ChatArea({ session, selectedCwd, newSessionCwd, chatInputRef, on
         _setMessages(normalized)
         setHasMessages(normalized.length > 0)
         forceScrollRef.current = true
+      }
+
+      // 老会话没有标题时，用第一条用户消息内容作为标题回填
+      if (normalized.length > 0 && !sdkSessionInfoRef.current?.firstMessage && onSessionCreated) {
+        const firstUser = normalized.find((msg) => msg.role === 'user')
+        if (firstUser?.content) {
+          const title = firstUser.content.trim().slice(0, 50)
+          const updatedInfo = { ...sdkSessionInfoRef.current!, firstMessage: title }
+          sdkSessionInfoRef.current = updatedInfo
+          onSessionCreated(updatedInfo)
+        }
       }
     } catch (err) {
       const state = getOrCreateSessionState(sessionId)
@@ -790,7 +805,7 @@ export function ChatArea({ session, selectedCwd, newSessionCwd, chatInputRef, on
           sessionFile: state.sdkSessionInfo?.sessionFile,
           created: state.sdkSessionInfo?.created ?? new Date().toISOString(),
           modified: new Date().toISOString(),
-          firstMessage: state.sdkSessionInfo?.firstMessage ?? '',
+          firstMessage: event.name || state.sdkSessionInfo?.firstMessage || '',
           messageCount: state.sdkSessionInfo?.messageCount ?? 0,
           name: event.name,
           titleSource: event.titleSource,
@@ -1062,7 +1077,7 @@ export function ChatArea({ session, selectedCwd, newSessionCwd, chatInputRef, on
           sessionFile: sdkSessionInfoRef.current?.sessionFile,
           created: sdkSessionInfoRef.current?.created ?? new Date().toISOString(),
           modified: new Date().toISOString(),
-          firstMessage: sdkSessionInfoRef.current?.firstMessage ?? '',
+          firstMessage: event.name || sdkSessionInfoRef.current?.firstMessage || '',
           messageCount: sdkSessionInfoRef.current?.messageCount ?? 0,
           name: event.name,
           titleSource: event.titleSource,

@@ -162,6 +162,16 @@ export default function App() {
 
   const handleSessionCreated = useCallback((session: SessionInfo) => {
     setSessions((current) => upsertSession(current, session))
+    // 同步更新当前选中会话的标题，避免 session_renamed 后主界面/侧边栏标题还是旧 ID
+    setSelectedSession((current) => {
+      if (current?.id !== session.id) return current
+      return {
+        ...current,
+        ...session,
+        firstMessage: session.firstMessage || current.firstMessage,
+        name: session.name || current.name,
+      }
+    })
   }, [])
 
   const handleRenameSession = useCallback(async (session: SessionInfo, name: string) => {
