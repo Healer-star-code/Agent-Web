@@ -889,7 +889,6 @@ function SessionItem({ session, isSelected, onClick, onDelete, onRename, onPin, 
         overflow: 'hidden',
       }}
       title={detailTitle}
-      whileHover={{ x: 2 }}
       whileTap={{ scale: 0.99 }}
       transition={{ type: 'spring', stiffness: 300, damping: 25 }}
     >
