@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
-import { Sidebar } from './components/Sidebar'
+import { Sidebar, type UserProfile, USER_PROFILE_KEY } from './components/Sidebar'
 import { ChatArea } from './components/ChatArea'
 import type { SessionInfo } from './mockData'
 import { SettingsPanel } from './components/SettingsPanel'
@@ -58,6 +58,18 @@ export default function App() {
       return new Set(raw ? JSON.parse(raw) as string[] : [])
     } catch { return new Set<string>() }
   })
+  const [userProfile, setUserProfile] = useState<UserProfile>(() => {
+    try {
+      const raw = localStorage.getItem(USER_PROFILE_KEY)
+      if (raw) {
+        const parsed = JSON.parse(raw) as UserProfile
+        if (parsed.name && typeof parsed.name === 'string') {
+          return { name: parsed.name.slice(0, 10), email: String(parsed.email ?? '') }
+        }
+      }
+    } catch { /* ignore */ }
+    return { name: '', email: '' }
+  })
   const chatInputRef = useRef<ChatInputHandle | null>(null)
 
   useEffect(() => {
@@ -65,6 +77,10 @@ export default function App() {
     const t = setTimeout(() => setToast(null), 4000)
     return () => clearTimeout(t)
   }, [toast])
+
+  useEffect(() => {
+    try { localStorage.setItem(USER_PROFILE_KEY, JSON.stringify(userProfile)) } catch { /* ignore */ }
+  }, [userProfile])
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', isDark)
@@ -224,6 +240,8 @@ export default function App() {
               onToast={(message, type) => setToast({ message, type })}
               onRefreshSessions={refreshSessions}
               onOpenSettings={() => setSettingsOpen(true)}
+              userProfile={userProfile}
+              onProfileChange={setUserProfile}
             />
           </div>
         </div>
@@ -316,6 +334,8 @@ export default function App() {
           serverUrl={serverUrl}
           onServerUrlChange={setServerUrl}
           onClose={() => setSettingsOpen(false)}
+          userProfile={userProfile}
+          onProfileChange={setUserProfile}
         />
       )}
       {toast && (

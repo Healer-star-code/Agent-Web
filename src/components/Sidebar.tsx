@@ -7,12 +7,13 @@ import { getMessages } from '../lib/piApi'
 import type { WebMessage } from '../lib/piApi'
 import { XiaojinLogo } from './XiaojinLogo'
 
-interface UserProfile {
+export interface UserProfile {
   name: string
   email: string
 }
 
-const USER_PROFILE_KEY = 'pi-user-profile-v1'
+export const USER_PROFILE_KEY = 'pi-user-profile-v1'
+
 const MAX_USERNAME_LEN = 10
 
 interface Props {
@@ -29,6 +30,8 @@ interface Props {
   onToast?: (message: string, type?: 'success' | 'error') => void
   onRefreshSessions?: () => void
   onOpenSettings?: () => void
+  userProfile?: UserProfile
+  onProfileChange?: (p: UserProfile) => void
 }
 
 function formatRelativeTime(dateStr: string): string {
@@ -130,7 +133,7 @@ const SKILLS: SkillDef[] = [
   { id: 'skill-creator', name: '技能创建', desc: '自定义新技能与工具' },
 ]
 
-export function Sidebar({ sessions, selectedId, onSelectSession, onNewSession, sessionLoadError, sessionsLoading, onDeleteSession, onRenameSession, onPinSession, pinnedIds, onToast, onRefreshSessions, onOpenSettings }: Props) {
+export function Sidebar({ sessions, selectedId, onSelectSession, onNewSession, sessionLoadError, sessionsLoading, onDeleteSession, onRenameSession, onPinSession, pinnedIds, onToast, onRefreshSessions, onOpenSettings, userProfile = { name: '', email: '' }, onProfileChange = () => {} }: Props) {
   const [activeNav, setActiveNav] = useState<NavId>('chat')
   const [sessionsCollapsed, setSessionsCollapsed] = useState(false)
   const [skillsCollapsed, setSkillsCollapsed] = useState(false)
@@ -139,18 +142,6 @@ export function Sidebar({ sessions, selectedId, onSelectSession, onNewSession, s
   const [searchingMessages, setSearchingMessages] = useState(false)
   const messageSearchIndexRef = useRef<Map<string, string>>(new Map())
   const [searchVersion, setSearchVersion] = useState(0)
-  const [userProfile, setUserProfile] = useState<UserProfile>(() => {
-    try {
-      const raw = localStorage.getItem(USER_PROFILE_KEY)
-      if (raw) {
-        const parsed = JSON.parse(raw) as UserProfile
-        if (parsed.name && typeof parsed.name === 'string') {
-          return { name: parsed.name.slice(0, MAX_USERNAME_LEN), email: String(parsed.email ?? '') }
-        }
-      }
-    } catch { /* ignore */ }
-    return { name: '', email: '' }
-  })
   const [userMenuOpen, setUserMenuOpen] = useState(false)
   const [editingProfile, setEditingProfile] = useState(false)
   const searchRef = useRef<HTMLInputElement>(null)
@@ -161,12 +152,6 @@ export function Sidebar({ sessions, selectedId, onSelectSession, onNewSession, s
       setSessionsCollapsed(false)
     }
   }, [selectedId, activeNav])
-
-  useEffect(() => {
-    try {
-      localStorage.setItem(USER_PROFILE_KEY, JSON.stringify(userProfile))
-    } catch { /* ignore */ }
-  }, [userProfile])
 
   // 搜索防抖：用户停止输入 300ms 后再触发消息内容搜索
   useEffect(() => {
@@ -550,7 +535,7 @@ export function Sidebar({ sessions, selectedId, onSelectSession, onNewSession, s
 
       <UserProfileBar
         profile={userProfile}
-        onProfileChange={setUserProfile}
+        onProfileChange={onProfileChange}
         menuOpen={userMenuOpen}
         onMenuOpenChange={setUserMenuOpen}
         editing={editingProfile}

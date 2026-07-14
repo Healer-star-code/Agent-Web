@@ -1,6 +1,24 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { motion } from 'framer-motion'
-import { testConnection, setStoredServerUrl } from '../lib/piApi'
+import {
+  User,
+  Gear,
+  Palette,
+  Cube,
+  Keyboard,
+  Question,
+  X,
+  Check,
+  Moon,
+  Sun,
+  ArrowClockwise,
+  Star,
+} from '@phosphor-icons/react'
+import { testConnection, setStoredServerUrl, listModels, getConfig } from '../lib/piApi'
+import type { ModelProviderInfo, ConfigInfo } from '../lib/piApi'
+import type { UserProfile } from './Sidebar'
+
+type TabId = 'account' | 'system' | 'personalization' | 'models' | 'shortcuts' | 'help'
 
 interface Props {
   isDark: boolean
@@ -12,23 +30,133 @@ interface Props {
   serverUrl: string
   onServerUrlChange: (url: string) => void
   onClose: () => void
+  userProfile: UserProfile
+  onProfileChange: (p: UserProfile) => void
 }
 
-export function SettingsPanel({ isDark, onThemeChange, fontSize, onFontSizeChange, mode, onModeChange, serverUrl, onServerUrlChange, onClose }: Props) {
+const ALL_FONT_SIZES = [14, 16, 18, 20, 22]
+const DEFAULT_SIZE = 16
+const MAX_USERNAME_LEN = 10
+
+function Avatar({ name, size = 32 }: { name: string; size?: number }) {
+  const initial = name.trim().slice(0, 1).toUpperCase() || '?'
+  const hue = name.trim() ? nameToHue(name) : 215
+  const bg = name.trim() ? `hsl(${hue} 65% 45%)` : 'var(--text-muted)'
+  return (
+    <div
+      style={{
+        width: size,
+        height: size,
+        borderRadius: '50%',
+        background: bg,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        color: '#fff',
+        fontSize: size < 36 ? 13 : 15,
+        fontWeight: 600,
+        flexShrink: 0,
+        boxShadow: `inset 0 1px 0 rgba(255,255,255,0.15), 0 0 0 1px hsl(${hue} 50% 30% / 0.25)`,
+      }}
+    >
+      {initial}
+    </div>
+  )
+}
+
+function nameToHue(name: string): number {
+  let hash = 0
+  for (let i = 0; i < name.length; i++) {
+    hash = (hash << 5) - hash + name.charCodeAt(i)
+    hash |= 0
+  }
+  return Math.abs(hash % 360)
+}
+
+export function SettingsPanel({
+  isDark,
+  onThemeChange,
+  fontSize,
+  onFontSizeChange,
+  mode,
+  onModeChange,
+  serverUrl,
+  onServerUrlChange,
+  onClose,
+  userProfile,
+  onProfileChange,
+}: Props) {
+  const [activeTab, setActiveTab] = useState<TabId>('account')
+  const [draftName, setDraftName] = useState(userProfile.name.slice(0, MAX_USERNAME_LEN))
+  const [draftEmail, setDraftEmail] = useState(userProfile.email)
+  const [isEditingProfile, setIsEditingProfile] = useState(false)
+
+  const [draftServerUrl, setDraftServerUrl] = useState(serverUrl)
+  const [testStatus, setTestStatus] = useState<{ loading: boolean; ok?: boolean; message?: string } | null>(null)
   const [draftTheme, setDraftTheme] = useState(isDark)
   const [draftFontSize, setDraftFontSize] = useState(fontSize)
   const [draftMode, setDraftMode] = useState(mode)
-  const [draftServerUrl, setDraftServerUrl] = useState(serverUrl)
-  const [testStatus, setTestStatus] = useState<{ loading: boolean; ok?: boolean; message?: string } | null>(null)
+
+  const [models, setModels] = useState<ModelProviderInfo[]>([])
+  const [config, setConfig] = useState<ConfigInfo | null>(null)
+  const [modelsLoading, setModelsLoading] = useState(false)
+  const [modelsError, setModelsError] = useState<string | null>(null)
+
+  const [shortcuts, setShortcuts] = useState<{ action: string; key: string }[]>(() => {
+    try {
+      const raw = localStorage.getItem('pi-shortcuts')
+      if (raw) return JSON.parse(raw)
+    } catch { /* ignore */ }
+    return [
+      { action: '新建对话', key: 'Ctrl + N' },
+      { action: '切换侧边栏', key: 'Ctrl + B' },
+      { action: '发送消息', key: 'Enter' },
+      { action: '换行', key: 'Shift + Enter' },
+    ]
+  })
+
+  const contentRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     queueMicrotask(() => {
+      setDraftServerUrl(serverUrl)
       setDraftTheme(isDark)
       setDraftFontSize(fontSize)
       setDraftMode(mode)
-      setDraftServerUrl(serverUrl)
     })
-  }, [isDark, fontSize, mode, serverUrl])
+  }, [serverUrl, isDark, fontSize, mode])
+
+  useEffect(() => {
+    setDraftName(userProfile.name.slice(0, MAX_USERNAME_LEN))
+    setDraftEmail(userProfile.email)
+  }, [userProfile])
+
+  useEffect(() => {
+    try { localStorage.setItem('pi-shortcuts', JSON.stringify(shortcuts)) } catch { /* ignore */ }
+  }, [shortcuts])
+
+  useEffect(() => {
+    if (activeTab !== 'models') return
+    setModelsLoading(true)
+    setModelsError(null)
+    Promise.all([listModels(), getConfig()])
+      .then(([modelsData, configData]) => {
+        setModels(modelsData)
+        setConfig(configData)
+      })
+      .catch((err) => {
+        setModelsError(err instanceof Error ? err.message : '加载模型失败')
+      })
+      .finally(() => setModelsLoading(false))
+  }, [activeTab])
+
+  useEffect(() => {
+    function handleKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', handleKey)
+    return () => window.removeEventListener('keydown', handleKey)
+  }, [onClose])
 
   const applyServerSettings = useCallback((url: string) => {
     const trimmedUrl = url.trim()
@@ -42,31 +170,344 @@ export function SettingsPanel({ isDark, onThemeChange, fontSize, onFontSizeChang
     return true
   }, [onServerUrlChange])
 
-  const saveAndClose = useCallback(() => {
-    if (!applyServerSettings(draftServerUrl)) return
+  const saveAll = useCallback(() => {
+    applyServerSettings(draftServerUrl)
     onThemeChange(draftTheme)
     onFontSizeChange(draftFontSize)
     onModeChange(draftMode)
-    onClose()
-  }, [draftServerUrl, draftTheme, draftFontSize, draftMode, applyServerSettings, onThemeChange, onFontSizeChange, onModeChange, onClose])
+  }, [draftServerUrl, draftTheme, draftFontSize, draftMode, applyServerSettings, onThemeChange, onFontSizeChange, onModeChange])
 
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if (e.key !== 'Escape') return
-      saveAndClose()
+  const handleSaveProfile = useCallback(() => {
+    const trimmedName = draftName.trim().slice(0, MAX_USERNAME_LEN)
+    const trimmedEmail = draftEmail.trim()
+    onProfileChange({ name: trimmedName, email: trimmedEmail })
+    setIsEditingProfile(false)
+  }, [draftName, draftEmail, onProfileChange])
+
+  const handleLogout = useCallback(() => {
+    onProfileChange({ name: '', email: '' })
+  }, [onProfileChange])
+
+  const testConnectionHandler = useCallback(async () => {
+    setTestStatus({ loading: true })
+    try {
+      setStoredServerUrl(draftServerUrl.trim())
+      await testConnection()
+      const applied = applyServerSettings(draftServerUrl)
+      setTestStatus({
+        loading: false,
+        ok: true,
+        message: applied ? '连接成功，设置已应用' : '连接成功，但保存设置时出错',
+      })
+    } catch (err) {
+      setTestStatus({ loading: false, ok: false, message: err instanceof Error ? err.message : '连接失败' })
     }
-    window.addEventListener('keydown', handler)
-    return () => window.removeEventListener('keydown', handler)
-  }, [saveAndClose])
+  }, [draftServerUrl, applyServerSettings])
 
-  const ALL_FONT_SIZES = [14, 16, 18, 20, 22]
-  const DEFAULT_SIZE = 16
+  const menuItems: { id: TabId; label: string; icon: React.ReactNode }[] = [
+    { id: 'account', label: '账户管理', icon: <User weight="duotone" size={18} /> },
+    { id: 'system', label: '系统设置', icon: <Gear weight="duotone" size={18} /> },
+    { id: 'personalization', label: '个性化', icon: <Palette weight="duotone" size={18} /> },
+    { id: 'models', label: '模型', icon: <Cube weight="duotone" size={18} /> },
+    { id: 'shortcuts', label: '快捷键', icon: <Keyboard weight="duotone" size={18} /> },
+    { id: 'help', label: '帮助与反馈', icon: <Question weight="duotone" size={18} /> },
+  ]
 
-  const handleModeChange = (newMode: 'young' | 'senior') => {
-    setDraftMode(newMode)
-    if (!ALL_FONT_SIZES.includes(draftFontSize)) {
-      setDraftFontSize(DEFAULT_SIZE)
-    }
+  const renderAccount = () => (
+    <div>
+      <h2 style={{ fontSize: 'var(--font-xl)', fontWeight: 700, color: 'var(--text)', marginBottom: 24 }}>账户管理</h2>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 20, marginBottom: 28 }}>
+        <Avatar name={userProfile.name} size={72} />
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 'var(--font-lg)', fontWeight: 600, color: 'var(--text)', marginBottom: 4 }}>
+            {userProfile.name || '未登录用户'}
+          </div>
+          <div style={{ fontSize: 'var(--font-sm)', color: 'var(--text-muted)' }}>
+            {userProfile.email || '暂无邮箱'}
+          </div>
+        </div>
+      </div>
+
+      {isEditingProfile ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12, maxWidth: 360, marginBottom: 20 }}>
+          <div>
+            <label style={{ display: 'block', fontSize: 'var(--font-xs)', color: 'var(--text-muted)', marginBottom: 6, fontWeight: 500 }}>昵称</label>
+            <input
+              type="text"
+              value={draftName}
+              onChange={(e) => setDraftName(e.target.value.slice(0, MAX_USERNAME_LEN))}
+              placeholder="请输入昵称"
+              className="input-field"
+            />
+          </div>
+          <div>
+            <label style={{ display: 'block', fontSize: 'var(--font-xs)', color: 'var(--text-muted)', marginBottom: 6, fontWeight: 500 }}>邮箱</label>
+            <input
+              type="email"
+              value={draftEmail}
+              onChange={(e) => setDraftEmail(e.target.value)}
+              placeholder="请输入邮箱（可选）"
+              className="input-field"
+            />
+          </div>
+          <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
+            <button onClick={handleSaveProfile} className="btn-save">保存</button>
+            <button onClick={() => setIsEditingProfile(false)} className="btn-ghost">取消</button>
+          </div>
+        </div>
+      ) : (
+        <div style={{ display: 'flex', gap: 10, marginBottom: 28 }}>
+          <button onClick={() => setIsEditingProfile(true)} className="btn-ghost">编辑资料</button>
+          {userProfile.name && (
+            <button onClick={handleLogout} className="btn-danger">退出登录</button>
+          )}
+        </div>
+      )}
+
+      <div style={{ padding: 16, borderRadius: 'var(--radius-lg)', background: 'var(--bg-hover)', border: '1px solid var(--border)' }}>
+        <div style={{ fontSize: 'var(--font-sm)', fontWeight: 600, color: 'var(--text)', marginBottom: 8 }}>本地账户说明</div>
+        <div style={{ fontSize: 'var(--font-xs)', color: 'var(--text-muted)', lineHeight: 1.6 }}>
+          当前为本地体验模式，账户信息仅保存在浏览器 localStorage 中。云端登录、Credits、订阅权益等功能需要后端接入 auth 服务后启用。
+        </div>
+      </div>
+    </div>
+  )
+
+  const renderSystem = () => (
+    <div>
+      <h2 style={{ fontSize: 'var(--font-xl)', fontWeight: 700, color: 'var(--text)', marginBottom: 24 }}>系统设置</h2>
+
+      <div style={{ marginBottom: 28 }}>
+        <div style={{ fontSize: 'var(--font-xs)', fontWeight: 600, color: 'var(--text-dim)', marginBottom: 10, textTransform: 'uppercase', letterSpacing: '0.05em' }}>服务器连接</div>
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+          <input
+            type="text"
+            value={draftServerUrl}
+            onChange={(e) => setDraftServerUrl(e.target.value)}
+            placeholder="http://127.0.0.1:3000"
+            className="input-field"
+            style={{ flex: 1, minWidth: 220 }}
+          />
+          <button onClick={testConnectionHandler} disabled={testStatus?.loading} className="btn-test">
+            {testStatus?.loading ? '测试中...' : '测试连接'}
+          </button>
+        </div>
+        {testStatus && !testStatus.loading && (
+          <div style={{ marginTop: 8, fontSize: 12, color: testStatus.ok ? 'var(--success)' : 'var(--danger)', display: 'flex', alignItems: 'center', gap: 5 }}>
+            {testStatus.ok ? (
+              <Check weight="bold" size={14} />
+            ) : (
+              <X weight="bold" size={14} />
+            )}
+            {testStatus.message}
+          </div>
+        )}
+      </div>
+
+      <div>
+        <div style={{ fontSize: 'var(--font-xs)', fontWeight: 600, color: 'var(--text-dim)', marginBottom: 10, textTransform: 'uppercase', letterSpacing: '0.05em' }}>使用模式</div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <button onClick={() => setDraftMode('young')} className={`btn-mode ${draftMode === 'young' ? 'active' : ''}`}>
+            <div style={{ width: 44, height: 44, borderRadius: 'var(--radius-lg)', background: draftMode === 'young' ? 'var(--accent)' : 'var(--bg-selected)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <Star weight="fill" size={22} color={draftMode === 'young' ? '#fff' : 'var(--accent)'} />
+            </div>
+            <div style={{ flex: 1, minWidth: 0, textAlign: 'left' }}>
+              <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 3 }}>青年教师版</div>
+              <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>现代化界面，标准字体，功能完整</div>
+            </div>
+            {draftMode === 'young' && <Check weight="bold" size={20} color="var(--accent)" />}
+          </button>
+          <button onClick={() => setDraftMode('senior')} className={`btn-mode ${draftMode === 'senior' ? 'active senior' : ''}`}>
+            <div style={{ width: 44, height: 44, borderRadius: 'var(--radius-lg)', background: draftMode === 'senior' ? 'var(--accent-senior)' : 'var(--bg-selected)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <Sun weight="fill" size={22} color={draftMode === 'senior' ? '#fff' : 'var(--accent-senior)'} />
+            </div>
+            <div style={{ flex: 1, minWidth: 0, textAlign: 'left' }}>
+              <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 3 }}>老教师版本</div>
+              <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>大字体、高对比度、简洁布局</div>
+            </div>
+            {draftMode === 'senior' && <Check weight="bold" size={20} color="var(--accent-senior)" />}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+
+  const renderPersonalization = () => (
+    <div>
+      <h2 style={{ fontSize: 'var(--font-xl)', fontWeight: 700, color: 'var(--text)', marginBottom: 24 }}>个性化</h2>
+
+      <div style={{ marginBottom: 24 }}>
+        <div style={{ fontSize: 'var(--font-xs)', fontWeight: 600, color: 'var(--text-dim)', marginBottom: 10, textTransform: 'uppercase', letterSpacing: '0.05em' }}>主题外观</div>
+        <div style={{ display: 'flex', gap: 10 }}>
+          <button onClick={() => setDraftTheme(true)} className={`btn-theme ${draftTheme ? 'active' : ''}`}>
+            <Moon weight="fill" size={18} />
+            深色
+          </button>
+          <button onClick={() => setDraftTheme(false)} className={`btn-theme ${!draftTheme ? 'active' : ''}`}>
+            <Sun weight="fill" size={18} />
+            浅色
+          </button>
+        </div>
+      </div>
+
+      <div style={{ marginBottom: 24 }}>
+        <div style={{ fontSize: 'var(--font-xs)', fontWeight: 600, color: 'var(--text-dim)', marginBottom: 10, textTransform: 'uppercase', letterSpacing: '0.05em' }}>字体大小</div>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          {ALL_FONT_SIZES.map((size) => {
+            const isSelected = draftFontSize === size
+            const isStandard = size === DEFAULT_SIZE
+            return (
+              <button key={size} onClick={() => setDraftFontSize(size)} className={`btn-font-size ${isSelected ? 'active' : ''} ${draftMode === 'senior' ? 'senior' : ''}`}>
+                <div style={{ fontSize: size, fontWeight: 700, marginBottom: 2, lineHeight: 1.2 }}>Aa</div>
+                <div style={{ fontSize: 11, opacity: 0.8 }}>{size}px</div>
+                {isStandard && <div className={`font-size-badge ${isSelected ? 'active' : ''} ${draftMode === 'senior' ? 'senior' : ''}`}>标准</div>}
+              </button>
+            )
+          })}
+        </div>
+        <div style={{ marginTop: 18, padding: '12px 14px', background: 'var(--bg)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border)' }}>
+          <div style={{ fontSize: 11, color: 'var(--text-dim)', marginBottom: 6, fontWeight: 500 }}>预览效果</div>
+          <div style={{ fontSize: draftFontSize, lineHeight: 1.6, color: 'var(--text)' }}>
+            超级小金可以帮助您备课、批改作业、生成教案，让教学工作更加轻松高效。
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+
+  const renderModels = () => (
+    <div>
+      <h2 style={{ fontSize: 'var(--font-xl)', fontWeight: 700, color: 'var(--text)', marginBottom: 24 }}>模型</h2>
+
+      {config?.defaultModel && (
+        <div style={{ marginBottom: 24, padding: 16, borderRadius: 'var(--radius-lg)', background: 'var(--bg-hover)', border: '1px solid var(--border)' }}>
+          <div style={{ fontSize: 'var(--font-xs)', color: 'var(--text-dim)', fontWeight: 600, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>当前默认模型</div>
+          <div style={{ fontSize: 'var(--font-md)', fontWeight: 600, color: 'var(--text)' }}>
+            {config.defaultModel.provider} / {config.defaultModel.modelId || config.defaultModel.id}
+          </div>
+        </div>
+      )}
+
+      {modelsLoading ? (
+        <div style={{ color: 'var(--text-muted)', padding: '20px 0' }}>加载模型列表中…</div>
+      ) : modelsError ? (
+        <div style={{ color: 'var(--danger)', padding: '20px 0' }}>{modelsError}</div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          {models.map((provider) => (
+            <div key={provider.id} style={{ padding: 16, borderRadius: 'var(--radius-lg)', background: 'var(--bg-hover)', border: '1px solid var(--border)' }}>
+              <div style={{ fontSize: 'var(--font-sm)', fontWeight: 700, color: 'var(--text)', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 8 }}>
+                <Cube weight="duotone" size={16} />
+                {provider.name}
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {provider.models.map((model) => (
+                  <div key={model.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 10px', borderRadius: 'var(--radius-sm)', background: 'var(--bg)' }}>
+                    <div>
+                      <div style={{ fontSize: 'var(--font-sm)', color: 'var(--text)', fontWeight: 500 }}>{model.name}</div>
+                      <div style={{ fontSize: 'var(--font-xs)', color: 'var(--text-muted)' }}>
+                        {model.contextWindow ? `上下文 ${model.contextWindow.toLocaleString()} tokens` : ''}
+                        {model.maxTokens ? ` · 最大 ${model.maxTokens.toLocaleString()} tokens` : ''}
+                        {model.reasoning ? ' · 支持推理' : ''}
+                      </div>
+                    </div>
+                    {config?.defaultModel?.modelId === model.id || config?.defaultModel?.id === model.id ? (
+                      <span style={{ fontSize: 'var(--font-xs)', color: 'var(--accent)', fontWeight: 600, padding: '2px 8px', background: 'var(--accent-bg)', borderRadius: 'var(--radius-lg)' }}>默认</span>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+
+  const renderShortcuts = () => (
+    <div>
+      <h2 style={{ fontSize: 'var(--font-xl)', fontWeight: 700, color: 'var(--text)', marginBottom: 24 }}>快捷键</h2>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {shortcuts.map((shortcut, index) => (
+          <div key={index} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 12px', borderRadius: 'var(--radius-md)', background: 'var(--bg-hover)', border: '1px solid var(--border)' }}>
+            <input
+              type="text"
+              value={shortcut.action}
+              onChange={(e) => {
+                const next = [...shortcuts]
+                next[index].action = e.target.value
+                setShortcuts(next)
+              }}
+              className="input-field"
+              style={{ flex: 1, border: 'none', background: 'transparent' }}
+            />
+            <input
+              type="text"
+              value={shortcut.key}
+              onChange={(e) => {
+                const next = [...shortcuts]
+                next[index].key = e.target.value
+                setShortcuts(next)
+              }}
+              className="input-field"
+              style={{ width: 120, textAlign: 'center', border: 'none', background: 'transparent', fontFamily: 'var(--font-mono)' }}
+            />
+            <button
+              onClick={() => setShortcuts(shortcuts.filter((_, i) => i !== index))}
+              style={{ padding: '4px 8px', color: 'var(--danger)', background: 'none', border: 'none', cursor: 'pointer', fontSize: 16 }}
+            >
+              ×
+            </button>
+          </div>
+        ))}
+      </div>
+      <button
+        onClick={() => setShortcuts([...shortcuts, { action: '', key: '' }])}
+        className="btn-ghost"
+        style={{ marginTop: 12 }}
+      >
+        添加快捷键
+      </button>
+      <div style={{ marginTop: 16, fontSize: 'var(--font-xs)', color: 'var(--text-muted)' }}>
+        快捷键设置仅保存在本地浏览器中。
+      </div>
+    </div>
+  )
+
+  const renderHelp = () => (
+    <div>
+      <h2 style={{ fontSize: 'var(--font-xl)', fontWeight: 700, color: 'var(--text)', marginBottom: 24 }}>帮助与反馈</h2>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <div style={{ padding: 16, borderRadius: 'var(--radius-lg)', background: 'var(--bg-hover)', border: '1px solid var(--border)' }}>
+          <div style={{ fontSize: 'var(--font-sm)', fontWeight: 600, color: 'var(--text)', marginBottom: 8 }}>版本信息</div>
+          <div style={{ fontSize: 'var(--font-sm)', color: 'var(--text-muted)' }}>超级小金 Web 客户端 v{__APP_VERSION__}</div>
+        </div>
+        <div style={{ padding: 16, borderRadius: 'var(--radius-lg)', background: 'var(--bg-hover)', border: '1px solid var(--border)' }}>
+          <div style={{ fontSize: 'var(--font-sm)', fontWeight: 600, color: 'var(--text)', marginBottom: 8 }}>使用说明</div>
+          <div style={{ fontSize: 'var(--font-sm)', color: 'var(--text-muted)', lineHeight: 1.7 }}>
+            1. 点击左侧「新建对话」开始与超级小金聊天。<br />
+            2. 在系统设置中配置后端服务器地址，默认连接本地 127.0.0.1:3000。<br />
+            3. 发送文件、图片或文字，超级小金会帮您处理教学相关任务。<br />
+            4. 历史对话会自动保存在当前工作目录中。
+          </div>
+        </div>
+        <div style={{ padding: 16, borderRadius: 'var(--radius-lg)', background: 'var(--bg-hover)', border: '1px solid var(--border)' }}>
+          <div style={{ fontSize: 'var(--font-sm)', fontWeight: 600, color: 'var(--text)', marginBottom: 8 }}>反馈</div>
+          <div style={{ fontSize: 'var(--font-sm)', color: 'var(--text-muted)', lineHeight: 1.7 }}>
+            遇到问题请检查后端服务是否已启动，并确认服务器地址、网络连接正常。
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+
+  const contentMap: Record<TabId, React.ReactNode> = {
+    account: renderAccount(),
+    system: renderSystem(),
+    personalization: renderPersonalization(),
+    models: renderModels(),
+    shortcuts: renderShortcuts(),
+    help: renderHelp(),
   }
 
   return (
@@ -75,9 +516,6 @@ export function SettingsPanel({ isDark, onThemeChange, fontSize, onFontSizeChang
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       transition={{ duration: 0.15 }}
-      onClick={() => {
-        saveAndClose()
-      }}
       style={{
         position: 'fixed', inset: 0, zIndex: 'var(--z-modal-backdrop)',
         background: 'var(--overlay-bg)',
@@ -86,232 +524,83 @@ export function SettingsPanel({ isDark, onThemeChange, fontSize, onFontSizeChang
       }}
     >
       <motion.div
-        initial={{ opacity: 0, y: 12, scale: 0.98 }}
-        animate={{ opacity: 1, y: 0, scale: 1 }}
-        exit={{ opacity: 0, y: 12, scale: 0.98 }}
+        initial={{ opacity: 0, scale: 0.98, y: 12 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.98, y: 12 }}
         transition={{ type: 'spring', stiffness: 300, damping: 25 }}
-        onClick={(e) => e.stopPropagation()}
         style={{
-          width: 460, maxWidth: '90vw',
-          background: 'color-mix(in srgb, var(--bg-panel) 92%, transparent)',
+          width: 900, maxWidth: '94vw', height: '82vh',
+          background: 'color-mix(in srgb, var(--bg-panel) 95%, transparent)',
           border: '1px solid color-mix(in srgb, var(--border) 70%, rgba(255,255,255,0.1))',
           borderRadius: 'var(--radius-xl)',
           boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.1), var(--shadow-xl)',
-          position: 'relative',
-          overflow: 'hidden',
-          padding: '24px 28px 20px',
-          maxHeight: '90vh', overflowY: 'auto',
+          display: 'flex', overflow: 'hidden',
           backdropFilter: 'blur(16px) saturate(180%)',
-          WebkitBackdropFilter: 'blur(16px) saturate(180%)',
         }}
+        onClick={(e) => e.stopPropagation()}
       >
-        {/* Header */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
-          <span style={{ fontWeight: 700, fontSize: 18, color: 'var(--text)' }}>设置</span>
-          <button onClick={onClose} className="btn-close">×</button>
-        </div>
-
-        {/* Server Connection */}
-        <div style={{ marginBottom: 24 }}>
-          <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-dim)', marginBottom: 10, textTransform: 'uppercase', letterSpacing: '0.05em' }}>服务器连接</div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            <div>
-              <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 6 }}>服务器地址</div>
-              <input
-                type="text"
-                value={draftServerUrl}
-                onChange={(e) => setDraftServerUrl(e.target.value)}
-                placeholder="http://127.0.0.1:3000"
-                className="input-field"
-              />
+        {/* Left sidebar */}
+        <div style={{ width: 220, minWidth: 220, borderRight: '1px solid var(--border)', display: 'flex', flexDirection: 'column', background: 'var(--bg)' }}>
+          <div style={{ padding: '20px 18px 16px', fontSize: 'var(--font-lg)', fontWeight: 700, color: 'var(--text)' }}>
+            设置
+          </div>
+          <div style={{ flex: 1, overflowY: 'auto', padding: '0 10px 16px' }}>
+            {menuItems.map((item) => (
               <button
-                onClick={async () => {
-                  setTestStatus({ loading: true })
-                  try {
-                    setStoredServerUrl(draftServerUrl.trim())
-                    await testConnection()
-                    const applied = applyServerSettings(draftServerUrl)
-                    setTestStatus({
-                      loading: false,
-                      ok: true,
-                      message: applied ? '连接成功，设置已应用' : '连接成功，但保存设置时出错',
-                    })
-                  } catch (err) {
-                    const message = err instanceof Error ? err.message : String(err)
-                    setTestStatus({ loading: false, ok: false, message })
-                  }
+                key={item.id}
+                onClick={() => {
+                  setActiveTab(item.id)
+                  contentRef.current?.scrollTo({ top: 0, behavior: 'smooth' })
                 }}
-                disabled={testStatus?.loading}
-                className="btn-test"
+                style={{
+                  width: '100%',
+                  display: 'flex', alignItems: 'center', gap: 10,
+                  padding: '10px 12px',
+                  borderRadius: 'var(--radius-md)',
+                  border: 'none',
+                  background: activeTab === item.id ? 'var(--bg-selected)' : 'transparent',
+                  color: activeTab === item.id ? 'var(--accent)' : 'var(--text)',
+                  fontSize: 'var(--font-sm)',
+                  fontWeight: activeTab === item.id ? 600 : 500,
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                  transition: 'background 0.15s, color 0.15s',
+                  marginBottom: 4,
+                }}
               >
-                {testStatus?.loading ? '测试中...' : '测试连接'}
+                <span style={{ color: activeTab === item.id ? 'var(--accent)' : 'var(--text-dim)' }}>{item.icon}</span>
+                {item.label}
               </button>
-              {testStatus && !testStatus.loading && (
-                <div
-                  style={{
-                    marginTop: 6,
-                    fontSize: 12,
-                    lineHeight: 1.4,
-                    color: testStatus.ok ? 'var(--success)' : 'var(--danger)',
-                    display: 'flex', alignItems: 'center', gap: 5,
-                  }}
-                >
-                  {testStatus.ok ? (
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                      <polyline points="20 6 9 17 4 12" />
-                    </svg>
-                  ) : (
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                      <line x1="18" y1="6" x2="6" y2="18" />
-                      <line x1="6" y1="6" x2="18" y2="18" />
-                    </svg>
-                  )}
-                  {testStatus.message}
-                </div>
-              )}
+            ))}
+          </div>
+          <div style={{ padding: '12px 16px', borderTop: '1px solid var(--border)', fontSize: 'var(--font-xs)', color: 'var(--text-muted)' }}>
+            v{__APP_VERSION__}
+          </div>
+        </div>
+
+        {/* Right content */}
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, background: 'var(--bg-panel)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 24px', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
+            <h1 style={{ fontSize: 'var(--font-xl)', fontWeight: 700, color: 'var(--text)', margin: 0 }}>
+              {menuItems.find((i) => i.id === activeTab)?.label}
+            </h1>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <button
+                onClick={() => { saveAll(); onClose() }}
+                className="btn-save"
+              >
+                <ArrowClockwise weight="bold" size={14} style={{ marginRight: 6 }} />
+                保存并关闭
+              </button>
+              <button onClick={onClose} className="btn-close" style={{ width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <X weight="bold" size={18} />
+              </button>
             </div>
           </div>
-        </div>
-
-        {/* Mode Selection */}
-        <div style={{ marginBottom: 24 }}>
-          <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-dim)', marginBottom: 10, textTransform: 'uppercase', letterSpacing: '0.05em' }}>使用模式</div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            <button onClick={() => handleModeChange('young')} className={`btn-mode ${draftMode === 'young' ? 'active' : ''}`}>
-              <div style={{
-                width: 44, height: 44, borderRadius: 'var(--radius-lg)',
-                background: draftMode === 'young' ? 'var(--accent)' : 'var(--bg-selected)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                flexShrink: 0,
-              }}>
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={draftMode === 'young' ? '#fff' : 'var(--accent)'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M22 10v6M2 10l10-5 10 5-10 5z" />
-                  <path d="M6 12v5c0 1.66 4 3 9 3s9-1.34 9-3v-5" />
-                </svg>
-              </div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 3, display: 'flex', alignItems: 'center', gap: 8 }}>
-                  青年教师版
-                  {draftMode === 'young' && (
-                    <span style={{
-                      fontSize: 11, fontWeight: 600, color: 'var(--accent)',
-                      background: 'var(--accent-bg)', padding: '2px 8px',
-                      borderRadius: 'var(--radius-lg)',
-                    }}>当前</span>
-                  )}
-                </div>
-                <div style={{ fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.5 }}>
-                  现代化界面，标准字体，功能完整
-                </div>
-              </div>
-              {draftMode === 'young' && (
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
-                  <polyline points="20 6 9 17 4 12" />
-                </svg>
-              )}
-            </button>
-            <button
-              onClick={() => handleModeChange('senior')}
-              className={`btn-mode ${draftMode === 'senior' ? 'active senior' : ''}`}
-            >
-              <div style={{
-                width: 44, height: 44, borderRadius: 'var(--radius-lg)',
-                background: draftMode === 'senior' ? 'var(--accent-senior)' : 'var(--bg-selected)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                flexShrink: 0,
-              }}>
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={draftMode === 'senior' ? '#fff' : 'var(--accent-senior)'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z" />
-                  <path d="M12 18v-3" />
-                  <path d="M12 8v1" />
-                  <circle cx="12" cy="12" r="1" />
-                </svg>
-              </div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 3, display: 'flex', alignItems: 'center', gap: 8 }}>
-                  老教师版本
-                  {draftMode === 'senior' && (
-                    <span style={{
-                      fontSize: 11, fontWeight: 600, color: 'var(--accent-senior)',
-                      background: 'var(--warning-bg)', padding: '2px 8px',
-                      borderRadius: 'var(--radius-lg)',
-                    }}>当前</span>
-                  )}
-                </div>
-                <div style={{ fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.5 }}>
-                  大字体、高对比度、简洁布局，更适合年长教师
-                </div>
-              </div>
-              {draftMode === 'senior' && (
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent-senior)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
-                  <polyline points="20 6 9 17 4 12" />
-                </svg>
-              )}
-            </button>
+          <div ref={contentRef} style={{ flex: 1, overflowY: 'auto', padding: '24px 28px' }}>
+            {contentMap[activeTab]}
           </div>
         </div>
-
-        {/* Font Size */}
-        <div style={{ marginBottom: 24 }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-            <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>字体大小</div>
-          </div>
-          <div style={{ display: 'flex', gap: 8 }}>
-            {ALL_FONT_SIZES.map((size) => {
-              const isSelected = draftFontSize === size
-              const isStandard = size === DEFAULT_SIZE
-              return (
-                <button key={size} onClick={() => setDraftFontSize(size)} className={`btn-font-size ${isSelected ? 'active' : ''} ${draftMode === 'senior' ? 'senior' : ''}`}>
-                  <div style={{ fontSize: size, fontWeight: 700, marginBottom: 2, lineHeight: 1.2 }}>Aa</div>
-                  <div style={{ fontSize: 11, opacity: 0.8 }}>{size}px</div>
-                  {isStandard && (
-                    <div className={`font-size-badge ${isSelected ? 'active' : ''} ${draftMode === 'senior' ? 'senior' : ''}`}>标准</div>
-                  )}
-                </button>
-              )
-            })}
-          </div>
-          {/* Preview */}
-          <div style={{
-            marginTop: 18, padding: '12px 14px',
-            background: 'var(--bg)', borderRadius: 'var(--radius-lg)',
-            border: '1px solid var(--border)',
-          }}>
-            <div style={{ fontSize: 11, color: 'var(--text-dim)', marginBottom: 6, fontWeight: 500 }}>预览效果</div>
-            <div style={{ fontSize: draftFontSize, lineHeight: 1.6, color: 'var(--text)' }}>
-              超级小金可以帮助您备课、批改作业、生成教案，让教学工作更加轻松高效。
-            </div>
-          </div>
-        </div>
-
-        {/* Theme */}
-        <div style={{ marginBottom: 24 }}>
-          <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-dim)', marginBottom: 10, textTransform: 'uppercase', letterSpacing: '0.05em' }}>主题外观</div>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button onClick={() => setDraftTheme(true)} className={`btn-theme ${draftTheme ? 'active' : ''}`}>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
-              </svg>
-              深色
-            </button>
-            <button onClick={() => setDraftTheme(false)} className={`btn-theme ${!draftTheme ? 'active' : ''}`}>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="12" cy="12" r="5" />
-                <line x1="12" y1="1" x2="12" y2="3" /><line x1="12" y1="21" x2="12" y2="23" />
-                <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" /><line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
-                <line x1="1" y1="12" x2="3" y2="12" /><line x1="21" y1="12" x2="23" y2="12" />
-                <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" /><line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
-              </svg>
-              浅色
-            </button>
-          </div>
-        </div>
-
-
-        {/* Save button */}
-        <button onClick={saveAndClose} className={`btn-save ${draftMode === 'senior' ? 'senior' : ''}`}>
-          保存并连接
-        </button>
       </motion.div>
     </motion.div>
   )
