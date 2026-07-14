@@ -339,6 +339,21 @@ export function SettingsPanel({
         )}
       </div>
 
+      <div style={{ marginBottom: 28 }}>
+        <div style={{ fontSize: 'var(--font-xs)', fontWeight: 600, color: 'var(--text-dim)', marginBottom: 10, textTransform: 'uppercase', letterSpacing: '0.05em' }}>默认工作空间路径</div>
+        <input
+          type="text"
+          value={draftCwd}
+          onChange={(e) => setDraftCwd(e.target.value)}
+          placeholder="E:\\SuperkingBackend"
+          className="input-field"
+          style={{ width: '100%' }}
+        />
+        <div style={{ marginTop: 8, fontSize: 'var(--font-xs)', color: 'var(--text-muted)', lineHeight: 1.5 }}>
+          新建任务、工作空间时将自动存放在该路径下。修改后不影响已有数据。
+        </div>
+      </div>
+
       <div>
         <div style={{ fontSize: 'var(--font-xs)', fontWeight: 600, color: 'var(--text-dim)', marginBottom: 10, textTransform: 'uppercase', letterSpacing: '0.05em' }}>使用模式</div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -382,6 +397,21 @@ export function SettingsPanel({
             <Sun weight="fill" size={18} />
             浅色
           </button>
+        </div>
+      </div>
+
+      <div style={{ marginBottom: 24 }}>
+        <div style={{ fontSize: 'var(--font-xs)', fontWeight: 600, color: 'var(--text-dim)', marginBottom: 10, textTransform: 'uppercase', letterSpacing: '0.05em' }}>显示语言</div>
+        <div style={{ display: 'flex', gap: 10 }}>
+          <button onClick={() => setDraftLanguage('zh')} className={`btn-theme ${draftLanguage === 'zh' ? 'active' : ''}`}>
+            中文
+          </button>
+          <button onClick={() => setDraftLanguage('en')} className={`btn-theme ${draftLanguage === 'en' ? 'active' : ''}`}>
+            English
+          </button>
+        </div>
+        <div style={{ marginTop: 8, fontSize: 'var(--font-xs)', color: 'var(--text-muted)', lineHeight: 1.5 }}>
+          当前设置会先保存语言偏好，后续将逐步完成全界面英文翻译。
         </div>
       </div>
 
@@ -438,37 +468,7 @@ export function SettingsPanel({
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                 {provider.models.map((model) => (
                   <div key={model.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 10px', borderRadius: 'var(--radius-sm)', background: 'var(--bg)' }}>
-      <div style={{ marginBottom: 28 }}>
-        <div style={{ fontSize: 'var(--font-xs)', fontWeight: 600, color: 'var(--text-dim)', marginBottom: 10, textTransform: 'uppercase', letterSpacing: '0.05em' }}>默认工作空间路径</div>
-        <input
-          type="text"
-          value={draftCwd}
-          onChange={(e) => setDraftCwd(e.target.value)}
-          placeholder="E:\\SuperkingBackend"
-          className="input-field"
-          style={{ width: '100%' }}
-        />
-        <div style={{ marginTop: 8, fontSize: 'var(--font-xs)', color: 'var(--text-muted)', lineHeight: 1.5 }}>
-          新建任务、工作空间时将自动存放在该路径下。修改后不影响已有数据。
-        </div>
-      </div>
-
-      <div style={{ marginBottom: 28 }}>
-        <div style={{ fontSize: 'var(--font-xs)', fontWeight: 600, color: 'var(--text-dim)', marginBottom: 10, textTransform: 'uppercase', letterSpacing: '0.05em' }}>显示语言</div>
-        <div style={{ display: 'flex', gap: 10 }}>
-          <button onClick={() => setDraftLanguage('zh')} className={`btn-theme ${draftLanguage === 'zh' ? 'active' : ''}`}>
-            中文
-          </button>
-          <button onClick={() => setDraftLanguage('en')} className={`btn-theme ${draftLanguage === 'en' ? 'active' : ''}`}>
-            English
-          </button>
-        </div>
-        <div style={{ marginTop: 8, fontSize: 'var(--font-xs)', color: 'var(--text-muted)', lineHeight: 1.5 }}>
-          当前设置会先保存语言偏好，后续将逐步完成全界面英文翻译。
-        </div>
-      </div>
-
-      <div>
+                    <div>
                       <div style={{ fontSize: 'var(--font-sm)', color: 'var(--text)', fontWeight: 500 }}>{model.name}</div>
                       <div style={{ fontSize: 'var(--font-xs)', color: 'var(--text-muted)' }}>
                         {model.contextWindow ? `上下文 ${model.contextWindow.toLocaleString()} tokens` : ''}
