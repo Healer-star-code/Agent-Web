@@ -102,18 +102,13 @@ export function SettingsPanel({
   const [modelsLoading, setModelsLoading] = useState(false)
   const [modelsError, setModelsError] = useState<string | null>(null)
 
-  const [shortcuts, setShortcuts] = useState<{ action: string; key: string }[]>(() => {
-    try {
-      const raw = localStorage.getItem('pi-shortcuts')
-      if (raw) return JSON.parse(raw)
-    } catch { /* ignore */ }
-    return [
-      { action: '新建对话', key: 'Ctrl + N' },
-      { action: '切换侧边栏', key: 'Ctrl + B' },
-      { action: '发送消息', key: 'Enter' },
-      { action: '换行', key: 'Shift + Enter' },
-    ]
-  })
+  const shortcuts = [
+    { action: '新建对话', key: 'Ctrl + N' },
+    { action: '切换侧边栏', key: 'Ctrl + B' },
+    { action: '发送消息', key: 'Enter' },
+    { action: '换行', key: 'Shift + Enter' },
+    { action: '关闭弹窗/取消编辑', key: 'Esc' },
+  ]
 
   const contentRef = useRef<HTMLDivElement>(null)
 
@@ -427,49 +422,23 @@ export function SettingsPanel({
   const renderShortcuts = () => (
     <div>
       <h2 style={{ fontSize: 'var(--font-xl)', fontWeight: 700, color: 'var(--text)', marginBottom: 24 }}>快捷键</h2>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
         {shortcuts.map((shortcut, index) => (
-          <div key={index} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 12px', borderRadius: 'var(--radius-md)', background: 'var(--bg-hover)', border: '1px solid var(--border)' }}>
-            <input
-              type="text"
-              value={shortcut.action}
-              onChange={(e) => {
-                const next = [...shortcuts]
-                next[index].action = e.target.value
-                setShortcuts(next)
-              }}
-              className="input-field"
-              style={{ flex: 1, border: 'none', background: 'transparent' }}
-            />
-            <input
-              type="text"
-              value={shortcut.key}
-              onChange={(e) => {
-                const next = [...shortcuts]
-                next[index].key = e.target.value
-                setShortcuts(next)
-              }}
-              className="input-field"
-              style={{ width: 120, textAlign: 'center', border: 'none', background: 'transparent', fontFamily: 'var(--font-mono)' }}
-            />
-            <button
-              onClick={() => setShortcuts(shortcuts.filter((_, i) => i !== index))}
-              style={{ padding: '4px 8px', color: 'var(--danger)', background: 'none', border: 'none', cursor: 'pointer', fontSize: 16 }}
-            >
-              ×
-            </button>
+          <div key={index} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', borderRadius: 'var(--radius-md)', background: 'var(--bg-hover)', border: '1px solid var(--border)' }}>
+            <div style={{ fontSize: 'var(--font-sm)', color: 'var(--text)', fontWeight: 500 }}>{shortcut.action}</div>
+            <div style={{ display: 'flex', gap: 4, fontFamily: 'var(--font-mono)', fontSize: 'var(--font-xs)', fontWeight: 600, color: 'var(--text)' }}>
+              {shortcut.key.split(' + ').map((part, i) => (
+                <span key={i} style={{ padding: '4px 8px', borderRadius: 'var(--radius-sm)', background: 'var(--bg)', border: '1px solid var(--border)' }}>{part}</span>
+              ))}
+            </div>
           </div>
         ))}
       </div>
-      <button
-        onClick={() => setShortcuts([...shortcuts, { action: '', key: '' }])}
-        className="btn-ghost"
-        style={{ marginTop: 12 }}
-      >
-        添加快捷键
-      </button>
-      <div style={{ marginTop: 16, fontSize: 'var(--font-xs)', color: 'var(--text-muted)' }}>
-        快捷键设置仅保存在本地浏览器中。
+      <div style={{ marginTop: 20, padding: 14, borderRadius: 'var(--radius-lg)', background: 'var(--bg-hover)', border: '1px solid var(--border)' }}>
+        <div style={{ fontSize: 'var(--font-sm)', fontWeight: 600, color: 'var(--text)', marginBottom: 6 }}>说明</div>
+        <div style={{ fontSize: 'var(--font-sm)', color: 'var(--text-muted)', lineHeight: 1.6 }}>
+          以上快捷键为当前客户端已绑定的真实快捷键。目前暂不支持自定义修改。
+        </div>
       </div>
     </div>
   )

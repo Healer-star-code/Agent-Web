@@ -101,17 +101,9 @@ export default function App() {
     setStoredServerUrl(serverUrl)
   }, [serverUrl])
 
-  // 加载模型列表与全局配置
   useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === 'b') {
-        e.preventDefault()
-        setSidebarOpen((v) => !v)
-      }
-    }
-    window.addEventListener('keydown', handler)
-    return () => window.removeEventListener('keydown', handler)
-  }, [])
+    setStoredServerUrl(serverUrl)
+  }, [serverUrl])
 
   const loadSessionsForCwd = useCallback((cwd: string | null) => {
     let cancelled = false
@@ -155,6 +147,23 @@ export default function App() {
     setSelectedSession(null)
     setNewSessionCwd(selectedCwd)
   }, [selectedCwd])
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.ctrlKey || e.metaKey) {
+        if (e.key === 'b') {
+          e.preventDefault()
+          setSidebarOpen((v) => !v)
+        }
+        if (e.key === 'n') {
+          e.preventDefault()
+          handleNewSession()
+        }
+      }
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [handleNewSession])
 
   const handleSessionCreated = useCallback((session: SessionInfo) => {
     setSessions((current) => upsertSession(current, session))
