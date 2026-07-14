@@ -571,16 +571,16 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
       style={{
         flexShrink: 0,
         background: 'transparent',
-        padding: '16px 24px',
+        padding: '18px 28px',
       }}
     >
-      <div style={{ maxWidth: 800, margin: '0 auto' }}>
+      <div style={{ maxWidth: 900, margin: '0 auto' }}>
         <div
           className={`chat-input-wrapper ${isFocused ? 'is-focused' : ''} ${isStreaming ? 'is-streaming' : ''}`}
           style={{
             display: 'flex',
             flexDirection: 'column',
-            boxShadow: 'var(--shadow-md)',
+            boxShadow: 'var(--shadow-lg)',
           }}
         >
         <div
@@ -594,7 +594,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
             display: 'flex',
             flexDirection: 'column',
             borderRadius: 'var(--radius-xl)',
-            padding: '14px 16px 14px 20px',
+            padding: '16px 18px 16px 22px',
           }}
         >
           {isDragging && (
@@ -693,7 +693,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
               fontSize: 'calc(var(--font-base) * 1.071)',
               lineHeight: 1.8,
               fontFamily: 'inherit',
-              minHeight: 40,
+              minHeight: 52,
               maxHeight: 160,
               overflow: 'auto',
             }}

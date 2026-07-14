@@ -163,7 +163,7 @@ export function WelcomeScreen({ chatInputRef, onSend, institution }: Props) {
         </motion.div>
 
         {/* Quick action cards (Bento grid) */}
-        <motion.div variants={item} className="w-full max-w-3xl grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-8">
+        <motion.div variants={item} className="w-full max-w-3xl grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-6">
           {QUICK_ACTIONS.map((action) => {
             const Icon = action.icon
             return (
@@ -194,7 +194,15 @@ export function WelcomeScreen({ chatInputRef, onSend, institution }: Props) {
         </motion.div>
 
         {/* Input */}
-        <motion.div variants={item} className="w-full max-w-2xl">
+        <motion.div variants={item} className="relative w-full max-w-3xl">
+          <motion.div
+            className="absolute -inset-4 rounded-3xl blur-2xl opacity-40 pointer-events-none"
+            style={{
+              background: 'radial-gradient(ellipse 80% 60% at 50% 50%, color-mix(in srgb, var(--accent) 20%, transparent), transparent)',
+            }}
+            animate={{ opacity: [0.3, 0.5, 0.3] }}
+            transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }}
+          />
           <ChatInput ref={chatInputRef} placeholder="开始对话..." onSend={onSend} />
         </motion.div>
 
