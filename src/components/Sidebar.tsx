@@ -625,7 +625,8 @@ function getSessionTitle(session: SessionInfo): string {
 }
 
 function getSessionDisplayTitle(session: SessionInfo): string {
-  return session.name || session.firstMessage || '新会话'
+  const base = session.name || session.firstMessage
+  return base || `新会话 ${session.id.slice(0, 6)}`
 }
 
 function formatSessionToMarkdown(session: SessionInfo, messages: WebMessage[]): string {

@@ -206,7 +206,12 @@ interface SuperKingSessionListItem {
   id: string
   createdAt: string
   lastActivityAt: string
-  state: SuperKingSessionState
+  state?: SuperKingSessionState
+  // 兼容旧版后端返回的扁平结构
+  cwd?: string
+  name?: string | null
+  messageCount?: number
+  model?: { provider: string; id: string }
 }
 
 interface SuperKingSessionCreateResponse {
@@ -259,14 +264,15 @@ export async function listSessions(cwd?: string): Promise<WebSessionInfo[]> {
 }
 
 export async function getSession(sessionId: string): Promise<WebSessionInfo> {
-  const data = await requestJson<SuperKingSessionState>(`/sessions/${encodeURIComponent(sessionId)}`)
+  const data = await requestJson<SuperKingSessionState & { id?: string; name?: string; sessionName?: string; cwd?: string }>(`/sessions/${encodeURIComponent(sessionId)}`)
+  const sessionName = data.sessionName ?? data.name
   return {
-    id: data.sessionId,
-    cwd: '',
-    name: data.sessionName,
+    id: data.sessionId ?? data.id ?? sessionId,
+    cwd: data.cwd ?? '',
+    name: sessionName,
     created: new Date().toISOString(),
     modified: new Date().toISOString(),
-    firstMessage: data.sessionName ?? '',
+    firstMessage: sessionName ?? '',
     messageCount: data.messageCount,
     active: false,
     model: data.model ? { provider: data.model.provider, modelId: data.model.id } : null,
@@ -275,18 +281,22 @@ export async function getSession(sessionId: string): Promise<WebSessionInfo> {
 
 function convertSession(s: SuperKingSessionListItem, fallbackCwd?: string): WebSessionInfo {
   const state = s.state
+  // 兼容旧版扁平结构（name/cwd 在顶层）和 v0.80 嵌套结构（sessionName/cwd 在 state 里）
+  const sessionName = s.name ?? state?.sessionName
+  const cwd = s.cwd ?? fallbackCwd ?? ''
   const createdAt = typeof s.createdAt === 'number' ? new Date(s.createdAt).toISOString() : s.createdAt
   const lastActivityAt = typeof s.lastActivityAt === 'number' ? new Date(s.lastActivityAt).toISOString() : s.lastActivityAt
+  const model = state?.model ?? s.model ?? null
   return {
     id: s.id,
-    cwd: fallbackCwd ?? '',
-    name: state.sessionName ?? undefined,
+    cwd,
+    name: sessionName ?? undefined,
     created: createdAt,
     modified: lastActivityAt,
-    firstMessage: state.sessionName ?? '',
-    messageCount: state.messageCount,
+    firstMessage: sessionName ?? '',
+    messageCount: state?.messageCount ?? s.messageCount ?? 0,
     active: false,
-    model: state.model ? { provider: state.model.provider, modelId: state.model.id } : null,
+    model: model ? { provider: model.provider, modelId: model.id } : null,
   }
 }
 
