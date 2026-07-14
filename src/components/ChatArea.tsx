@@ -33,10 +33,8 @@ type ChatSessionState = {
 import { MessageView } from './MessageView'
 import { MessageErrorBoundary } from './MessageErrorBoundary'
 import { ChatInput, type ChatInputHandle } from './ChatInput'
-import { Typewriter } from './Typewriter'
 import { ReasoningBlock } from './ReasoningBlock'
-
-import { XiaojinLogo } from './XiaojinLogo'
+import { WelcomeScreen } from './WelcomeScreen'
 
 import {
   connectSessionEvents,
@@ -165,26 +163,6 @@ function PendingTaskCard({ task }: { task?: 'word' | 'default' }) {
     </div>
   )
 }
-
-const TYPEWRITER_PHRASES = [
-  '准备好了吗？',
-  '有什么想问的？',
-  '一起来做点酷的事。',
-  '探索你的代码库。',
-  '起草一份教案。',
-  '总结这篇论文。',
-  '规划你的课程。',
-  '用简单的话解释一下。',
-  '和我结对编程。',
-  '修复那个烦人的 bug。',
-  '翻译成中文。',
-  '写一首俳句。',
-  '头脑风暴一下。',
-  '帮我审查代码。',
-  '发布上线！',
-  '让它更好看。',
-  '和我一起理清思路。',
-]
 
 function toMessageAttachments(attachments: LocalAttachment[] | undefined): MessageAttachment[] | undefined {
   if (!attachments || attachments.length === 0) return undefined
@@ -1564,40 +1542,11 @@ export function ChatArea({ session, selectedCwd, newSessionCwd, chatInputRef, on
 
   if (isEmptyNew || isNewSession) {
     return (
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', height: '100%', background: 'var(--bg)', overflow: 'hidden' }}>
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', overflowY: 'auto', padding: '20px 16px' }}>
-          <div style={{ width: '100%', maxWidth: 820 }}>
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              gap: 12,
-              marginLeft: 16,
-              marginRight: 52,
-              marginBottom: 16,
-              fontFamily: 'var(--font-mono)',
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0, flex: 1, lineHeight: 1.2 }}>
-                {/* 超级小金动态吉祥物（亮/暗主题双版本，详见 XiaojinLogo.tsx） */}
-                <XiaojinLogo size={56} />
-                <span style={{ fontSize: 'var(--font-display)', fontWeight: 800, letterSpacing: '-0.04em', color: 'var(--text)' }}>超级小金</span>
-                <span style={{ fontSize: 'var(--font-base)', minWidth: 0, overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>
-                  <Typewriter phrases={TYPEWRITER_PHRASES} />
-                </span>
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2, flexShrink: 0 }}>
-                <span style={{ fontSize: 'var(--font-xs)', color: 'var(--text-muted)' }}>
-                  超级小金
-                </span>
-                <span style={{ fontSize: 'var(--font-xs)', color: 'var(--text-muted)' }}>
-                  {APP_INSTITUTION}
-                </span>
-              </div>
-            </div>
-            <ChatInput ref={chatInputRef} onSend={handleSend} onAbort={handleAbort} />
-          </div>
-        </div>
-      </div>
+      <WelcomeScreen
+        chatInputRef={chatInputRef}
+        onSend={handleSend}
+        institution={APP_INSTITUTION}
+      />
     )
   }
 

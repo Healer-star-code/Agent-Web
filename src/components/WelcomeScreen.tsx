@@ -2,6 +2,7 @@ import { motion, type Variants } from 'framer-motion'
 import { ChatInput, type ChatInputHandle } from './ChatInput'
 import { Typewriter } from './Typewriter'
 import { XiaojinLogo } from './XiaojinLogo'
+import type { LocalAttachment } from '../mockData'
 
 const TYPEWRITER_PHRASES = [
   '准备好了吗？',
@@ -42,7 +43,7 @@ const item: Variants = {
 
 interface Props {
   chatInputRef: React.RefObject<ChatInputHandle | null>
-  onSend: () => void
+  onSend: (message: string, attachments?: LocalAttachment[]) => void
   institution?: string
 }
 
