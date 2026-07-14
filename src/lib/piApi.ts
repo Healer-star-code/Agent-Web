@@ -250,9 +250,9 @@ export async function createSession(cwd?: string, _sessionFile?: string): Promis
   return convertSession({ id: data.id, createdAt: new Date().toISOString(), lastActivityAt: new Date().toISOString(), state: data.state }, cwd)
 }
 
-export async function listSessions(_cwd?: string): Promise<WebSessionInfo[]> {
+export async function listSessions(cwd?: string): Promise<WebSessionInfo[]> {
   const data = await requestJson<{ sessions: SuperKingSessionListItem[] }>('/sessions')
-  return data.sessions.map((s) => convertSession(s))
+  return data.sessions.map((s) => convertSession(s, cwd))
 }
 
 export async function getSession(sessionId: string): Promise<WebSessionInfo> {
@@ -316,12 +316,13 @@ export async function deleteSession(sessionId: string): Promise<void> {
   })
 }
 
-export async function renameSession(sessionId: string, name: string): Promise<WebSessionInfo> {
+export async function renameSession(sessionId: string, name: string, cwd?: string): Promise<WebSessionInfo> {
   await requestJson<{ state: SuperKingSessionState }>(`/sessions/${encodeURIComponent(sessionId)}`, {
     method: 'PATCH',
     body: JSON.stringify({ name }),
   })
-  return getSession(sessionId)
+  const session = await getSession(sessionId)
+  return { ...session, cwd: cwd ?? session.cwd }
 }
 
 // ---------------------------------------------------------------------------

@@ -45,6 +45,7 @@ import {
   type WebAgentEvent,
   type ApiImagePayload,
 } from '../lib/piApi'
+import { summarizeTitle } from '../lib/sessionState'
 import { createSkillStreamParser, extractSkillBlocks, type SkillStreamParser } from '../lib/skillContentParser'
 
 interface Props {
@@ -493,15 +494,15 @@ export function ChatArea({ session, selectedCwd, newSessionCwd, chatInputRef, on
       }
 
       // 老会话没有标题时，用第一条用户消息内容作为标题回填
-      if (normalized.length > 0 && !sdkSessionInfoRef.current?.firstMessage && onSessionCreated) {
-        const firstUser = normalized.find((msg) => msg.role === 'user')
-        if (firstUser?.content) {
-          const title = firstUser.content.trim().slice(0, 50)
-          const updatedInfo = { ...sdkSessionInfoRef.current!, firstMessage: title }
-          sdkSessionInfoRef.current = updatedInfo
-          onSessionCreated(updatedInfo)
+if (normalized.length > 0 && !sdkSessionInfoRef.current?.firstMessage && onSessionCreated) {
+          const firstUser = normalized.find((msg) => msg.role === 'user')
+          if (firstUser?.content) {
+            const title = summarizeTitle(firstUser.content.trim())
+            const updatedInfo = { ...sdkSessionInfoRef.current!, firstMessage: title }
+            sdkSessionInfoRef.current = updatedInfo
+            onSessionCreated(updatedInfo)
+          }
         }
-      }
     } catch (err) {
       const state = getOrCreateSessionState(sessionId)
       const message = err instanceof Error ? err.message : String(err)
@@ -1230,7 +1231,7 @@ export function ChatArea({ session, selectedCwd, newSessionCwd, chatInputRef, on
       await connectEvents(sdkSession.id)
       const updatedSession = {
         ...sdkSession,
-        firstMessage: sdkSession.firstMessage || text,
+        firstMessage: sdkSession.firstMessage || summarizeTitle(text),
         messageCount: Math.max(sdkSession.messageCount, 1),
         modified: new Date().toISOString(),
       }

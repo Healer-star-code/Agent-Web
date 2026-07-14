@@ -148,17 +148,18 @@ export default function App() {
       return {
         ...current,
         ...session,
-        firstMessage: session.firstMessage || current.firstMessage,
-        name: session.name || current.name,
+        firstMessage: session.firstMessage ?? current.firstMessage,
+        name: session.name ?? current.name,
       }
     })
   }, [])
 
   const handleRenameSession = useCallback(async (session: SessionInfo, name: string) => {
     try {
-      const renamed = await renameSession(session.id, name)
-      setSessions((current) => upsertSession(current, { ...session, ...renamed, modified: session.modified }))
-      setSelectedSession((current) => current?.id === session.id ? { ...current, ...renamed, modified: current.modified } : current)
+      const renamed = await renameSession(session.id, name, session.cwd)
+      const merged = { ...renamed, cwd: session.cwd }
+      setSessions((current) => upsertSession(current, { ...session, ...merged }))
+      setSelectedSession((current) => current?.id === session.id ? { ...current!, ...merged } : current)
     } catch (err) {
       setToast({ message: '重命名失败：' + (err instanceof Error ? err.message : String(err)), type: 'error' })
     }

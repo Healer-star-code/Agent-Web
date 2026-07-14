@@ -621,7 +621,7 @@ function formatDateTime(dateStr: string): string {
 }
 
 function getSessionTitle(session: SessionInfo): string {
-  return session.name || session.firstMessage.slice(0, 50) || session.id.slice(0, 12)
+  return session.name || session.firstMessage || session.id.slice(0, 12)
 }
 
 function formatSessionToMarkdown(session: SessionInfo, messages: WebMessage[]): string {
@@ -882,7 +882,7 @@ function SessionItem({ session, isSelected, onClick, onDelete, onRename, onPin, 
         paddingLeft: depth > 0 ? depth * 12 + 14 : 14,
         paddingRight: 8,
         cursor: 'pointer',
-        background: isSelected ? 'var(--bg-selected)' : hovered ? 'var(--bg-hover)' : 'transparent',
+        background: isSelected ? 'var(--bg-selected)' : (hovered || menuOpen) ? 'var(--bg-hover)' : 'transparent',
         borderLeft: isSelected ? '2px solid var(--accent)' : '2px solid transparent',
         transition: 'background 0.1s',
         gap: 6,
