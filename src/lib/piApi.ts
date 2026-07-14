@@ -252,7 +252,7 @@ export async function createSession(cwd?: string, _sessionFile?: string): Promis
 
 export async function listSessions(cwd?: string): Promise<WebSessionInfo[]> {
   const params = new URLSearchParams()
-  if (cwd) params.set('directory', cwd)
+  if (cwd) params.set('cwd', cwd)
   const query = params.toString()
   const data = await requestJson<{ sessions: SuperKingSessionListItem[] }>(`/sessions${query ? `?${query}` : ''}`)
   return data.sessions.map((s) => convertSession(s, cwd))
