@@ -624,16 +624,26 @@ html.senior-mode .markdown-body td {
 }
 
 .btn-save {
-  width: 100%;
-  padding: 14px 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 9px 18px;
   border: none;
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-md);
   background: var(--accent);
   color: #fff;
-  font-size: 15px;
-  font-weight: 700;
+  font-size: 14px;
+  font-weight: 600;
   cursor: pointer;
   transition: filter 0.15s ease, background-color 0.15s ease;
+}
+
+.btn-save-block {
+  width: 100%;
+  padding: 14px 0;
+  border-radius: var(--radius-lg);
+  font-size: 15px;
 }
 
 .btn-save:hover {

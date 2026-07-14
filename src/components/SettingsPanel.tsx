@@ -11,8 +11,8 @@ import {
   Check,
   Moon,
   Sun,
-  ArrowClockwise,
   Star,
+  FloppyDisk,
 } from '@phosphor-icons/react'
 import { testConnection, setStoredServerUrl, listModels, getConfig } from '../lib/piApi'
 import type { ModelProviderInfo, ConfigInfo } from '../lib/piApi'
@@ -584,13 +584,36 @@ export function SettingsPanel({
             <h1 style={{ fontSize: 'var(--font-xl)', fontWeight: 700, color: 'var(--text)', margin: 0 }}>
               {menuItems.find((i) => i.id === activeTab)?.label}
             </h1>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               <button
                 onClick={() => { saveAll(); onClose() }}
-                className="btn-save"
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  padding: '8px 14px',
+                  borderRadius: 'var(--radius-md)',
+                  border: '1px solid var(--border)',
+                  background: 'var(--bg)',
+                  color: 'var(--text)',
+                  fontSize: 'var(--font-sm)',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  transition: 'background 0.15s, border-color 0.15s, color 0.15s',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = 'var(--bg-hover)'
+                  e.currentTarget.style.borderColor = 'var(--accent)'
+                  e.currentTarget.style.color = 'var(--accent)'
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = 'var(--bg)'
+                  e.currentTarget.style.borderColor = 'var(--border)'
+                  e.currentTarget.style.color = 'var(--text)'
+                }}
               >
-                <ArrowClockwise weight="bold" size={14} style={{ marginRight: 6 }} />
-                保存并关闭
+                <FloppyDisk weight="bold" size={14} />
+                保存
               </button>
               <button onClick={onClose} className="btn-close" style={{ width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <X weight="bold" size={18} />
