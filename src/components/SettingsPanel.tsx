@@ -32,11 +32,44 @@ interface Props {
   onClose: () => void
   userProfile: UserProfile
   onProfileChange: (p: UserProfile) => void
+  selectedCwd: string | null
+  onCwdChange: (cwd: string | null) => void
+  language: 'zh' | 'en'
+  onLanguageChange: (lang: 'zh' | 'en') => void
 }
 
 const ALL_FONT_SIZES = [14, 16, 18, 20, 22]
 const DEFAULT_SIZE = 16
 const MAX_USERNAME_LEN = 10
+
+const dict = {
+  zh: {
+    title: '设置',
+    account: '账户管理',
+    system: '系统设置',
+    personalization: '个性化',
+    models: '模型',
+    shortcuts: '快捷键',
+    help: '帮助与反馈',
+    save: '保存',
+    version: 'v',
+  },
+  en: {
+    title: 'Settings',
+    account: 'Account',
+    system: 'System',
+    personalization: 'Personalization',
+    models: 'Models',
+    shortcuts: 'Shortcuts',
+    help: 'Help & Feedback',
+    save: 'Save',
+    version: 'v',
+  },
+}
+
+function useT(language: 'zh' | 'en') {
+  return (key: keyof typeof dict.zh) => dict[language][key]
+}
 
 function Avatar({ name, size = 32 }: { name: string; size?: number }) {
   const initial = name.trim().slice(0, 1).toUpperCase() || '?'
@@ -85,7 +118,12 @@ export function SettingsPanel({
   onClose,
   userProfile,
   onProfileChange,
+  selectedCwd,
+  onCwdChange,
+  language,
+  onLanguageChange,
 }: Props) {
+  const t = useT(language)
   const [activeTab, setActiveTab] = useState<TabId>('account')
   const [draftName, setDraftName] = useState(userProfile.name.slice(0, MAX_USERNAME_LEN))
   const [draftEmail, setDraftEmail] = useState(userProfile.email)
@@ -96,6 +134,8 @@ export function SettingsPanel({
   const [draftTheme, setDraftTheme] = useState(isDark)
   const [draftFontSize, setDraftFontSize] = useState(fontSize)
   const [draftMode, setDraftMode] = useState(mode)
+  const [draftCwd, setDraftCwd] = useState(selectedCwd ?? '')
+  const [draftLanguage, setDraftLanguage] = useState(language)
 
   const [models, setModels] = useState<ModelProviderInfo[]>([])
   const [config, setConfig] = useState<ConfigInfo | null>(null)
@@ -118,17 +158,15 @@ export function SettingsPanel({
       setDraftTheme(isDark)
       setDraftFontSize(fontSize)
       setDraftMode(mode)
+      setDraftCwd(selectedCwd ?? '')
+      setDraftLanguage(language)
     })
-  }, [serverUrl, isDark, fontSize, mode])
+  }, [serverUrl, isDark, fontSize, mode, selectedCwd, language])
 
   useEffect(() => {
     setDraftName(userProfile.name.slice(0, MAX_USERNAME_LEN))
     setDraftEmail(userProfile.email)
   }, [userProfile])
-
-  useEffect(() => {
-    try { localStorage.setItem('pi-shortcuts', JSON.stringify(shortcuts)) } catch { /* ignore */ }
-  }, [shortcuts])
 
   useEffect(() => {
     if (activeTab !== 'models') return
@@ -170,7 +208,9 @@ export function SettingsPanel({
     onThemeChange(draftTheme)
     onFontSizeChange(draftFontSize)
     onModeChange(draftMode)
-  }, [draftServerUrl, draftTheme, draftFontSize, draftMode, applyServerSettings, onThemeChange, onFontSizeChange, onModeChange])
+    onCwdChange(draftCwd.trim() || null)
+    onLanguageChange(draftLanguage)
+  }, [draftServerUrl, draftTheme, draftFontSize, draftMode, draftCwd, draftLanguage, applyServerSettings, onThemeChange, onFontSizeChange, onModeChange, onCwdChange, onLanguageChange])
 
   const handleSaveProfile = useCallback(() => {
     const trimmedName = draftName.trim().slice(0, MAX_USERNAME_LEN)
@@ -200,12 +240,12 @@ export function SettingsPanel({
   }, [draftServerUrl, applyServerSettings])
 
   const menuItems: { id: TabId; label: string; icon: React.ReactNode }[] = [
-    { id: 'account', label: '账户管理', icon: <User weight="duotone" size={18} /> },
-    { id: 'system', label: '系统设置', icon: <Gear weight="duotone" size={18} /> },
-    { id: 'personalization', label: '个性化', icon: <Palette weight="duotone" size={18} /> },
-    { id: 'models', label: '模型', icon: <Cube weight="duotone" size={18} /> },
-    { id: 'shortcuts', label: '快捷键', icon: <Keyboard weight="duotone" size={18} /> },
-    { id: 'help', label: '帮助与反馈', icon: <Question weight="duotone" size={18} /> },
+    { id: 'account', label: t('account'), icon: <User weight="duotone" size={18} /> },
+    { id: 'system', label: t('system'), icon: <Gear weight="duotone" size={18} /> },
+    { id: 'personalization', label: t('personalization'), icon: <Palette weight="duotone" size={18} /> },
+    { id: 'models', label: t('models'), icon: <Cube weight="duotone" size={18} /> },
+    { id: 'shortcuts', label: t('shortcuts'), icon: <Keyboard weight="duotone" size={18} /> },
+    { id: 'help', label: t('help'), icon: <Question weight="duotone" size={18} /> },
   ]
 
   const renderAccount = () => (
@@ -398,7 +438,37 @@ export function SettingsPanel({
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                 {provider.models.map((model) => (
                   <div key={model.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 10px', borderRadius: 'var(--radius-sm)', background: 'var(--bg)' }}>
-                    <div>
+      <div style={{ marginBottom: 28 }}>
+        <div style={{ fontSize: 'var(--font-xs)', fontWeight: 600, color: 'var(--text-dim)', marginBottom: 10, textTransform: 'uppercase', letterSpacing: '0.05em' }}>默认工作空间路径</div>
+        <input
+          type="text"
+          value={draftCwd}
+          onChange={(e) => setDraftCwd(e.target.value)}
+          placeholder="E:\\SuperkingBackend"
+          className="input-field"
+          style={{ width: '100%' }}
+        />
+        <div style={{ marginTop: 8, fontSize: 'var(--font-xs)', color: 'var(--text-muted)', lineHeight: 1.5 }}>
+          新建任务、工作空间时将自动存放在该路径下。修改后不影响已有数据。
+        </div>
+      </div>
+
+      <div style={{ marginBottom: 28 }}>
+        <div style={{ fontSize: 'var(--font-xs)', fontWeight: 600, color: 'var(--text-dim)', marginBottom: 10, textTransform: 'uppercase', letterSpacing: '0.05em' }}>显示语言</div>
+        <div style={{ display: 'flex', gap: 10 }}>
+          <button onClick={() => setDraftLanguage('zh')} className={`btn-theme ${draftLanguage === 'zh' ? 'active' : ''}`}>
+            中文
+          </button>
+          <button onClick={() => setDraftLanguage('en')} className={`btn-theme ${draftLanguage === 'en' ? 'active' : ''}`}>
+            English
+          </button>
+        </div>
+        <div style={{ marginTop: 8, fontSize: 'var(--font-xs)', color: 'var(--text-muted)', lineHeight: 1.5 }}>
+          当前设置会先保存语言偏好，后续将逐步完成全界面英文翻译。
+        </div>
+      </div>
+
+      <div>
                       <div style={{ fontSize: 'var(--font-sm)', color: 'var(--text)', fontWeight: 500 }}>{model.name}</div>
                       <div style={{ fontSize: 'var(--font-xs)', color: 'var(--text-muted)' }}>
                         {model.contextWindow ? `上下文 ${model.contextWindow.toLocaleString()} tokens` : ''}
@@ -511,7 +581,7 @@ export function SettingsPanel({
         {/* Left sidebar */}
         <div style={{ width: 220, minWidth: 220, borderRight: '1px solid var(--border)', display: 'flex', flexDirection: 'column', background: 'var(--bg)' }}>
           <div style={{ padding: '20px 18px 16px', fontSize: 'var(--font-lg)', fontWeight: 700, color: 'var(--text)' }}>
-            设置
+            {t('title')}
           </div>
           <div style={{ flex: 1, overflowY: 'auto', padding: '0 10px 16px' }}>
             {menuItems.map((item) => (
@@ -543,7 +613,7 @@ export function SettingsPanel({
             ))}
           </div>
           <div style={{ padding: '12px 16px', borderTop: '1px solid var(--border)', fontSize: 'var(--font-xs)', color: 'var(--text-muted)' }}>
-            v{__APP_VERSION__}
+            {t('version')}{__APP_VERSION__}
           </div>
         </div>
 
@@ -582,7 +652,7 @@ export function SettingsPanel({
                 }}
               >
                 <FloppyDisk weight="bold" size={14} />
-                保存
+                {t('save')}
               </button>
               <button onClick={onClose} className="btn-close" style={{ width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <X weight="bold" size={18} />

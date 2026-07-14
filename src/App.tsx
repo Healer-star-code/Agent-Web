@@ -22,7 +22,19 @@ export default function App() {
   const [sessionLoadError, setSessionLoadError] = useState<string | null>(null)
   const [sessionsLoading, setSessionsLoading] = useState(false)
   const [selectedSession, setSelectedSession] = useState<SessionInfo | null>(null)
-  const [selectedCwd] = useState<string | null>('E:\\\\SuperkingBackend')
+  const [selectedCwd, setSelectedCwd] = useState<string | null>(() => {
+    try {
+      const saved = localStorage.getItem('pi-default-cwd')
+      if (saved) return saved
+    } catch { /* ignore */ }
+    return 'E:\\\\SuperkingBackend'
+  })
+  const [language, setLanguage] = useState<'zh' | 'en'>(() => {
+    try {
+      const saved = localStorage.getItem('pi-language')
+      return saved === 'en' ? 'en' : 'zh'
+    } catch { return 'zh' }
+  })
 
   const [newSessionCwd, setNewSessionCwd] = useState<string | null>(null)
   const [sidebarOpen, setSidebarOpen] = useState(true)
@@ -81,6 +93,14 @@ export default function App() {
   useEffect(() => {
     try { localStorage.setItem(USER_PROFILE_KEY, JSON.stringify(userProfile)) } catch { /* ignore */ }
   }, [userProfile])
+
+  useEffect(() => {
+    try { localStorage.setItem('pi-default-cwd', selectedCwd ?? 'E:\\\\SuperkingBackend') } catch { /* ignore */ }
+  }, [selectedCwd])
+
+  useEffect(() => {
+    try { localStorage.setItem('pi-language', language) } catch { /* ignore */ }
+  }, [language])
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', isDark)
@@ -345,6 +365,10 @@ export default function App() {
           onClose={() => setSettingsOpen(false)}
           userProfile={userProfile}
           onProfileChange={setUserProfile}
+          selectedCwd={selectedCwd}
+          onCwdChange={setSelectedCwd}
+          language={language}
+          onLanguageChange={setLanguage}
         />
       )}
       {toast && (
