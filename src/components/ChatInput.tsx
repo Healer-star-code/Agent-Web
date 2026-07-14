@@ -19,6 +19,7 @@ interface Props {
   onAbort?: () => void
   isStreaming?: boolean
   placeholder?: string
+  maxWidth?: number
 }
 
 function attachmentType(file: File): MessageAttachment['type'] {
@@ -37,7 +38,7 @@ export interface ChatInputHandle {
 }
 
 export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
-  onSend, onAbort, isStreaming, placeholder,
+  onSend, onAbort, isStreaming, placeholder, maxWidth = 800,
 }, ref) {
   const [value, setValue] = useState('')
   const [recording, setRecording] = useState(false)
@@ -574,7 +575,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
         padding: '18px 28px',
       }}
     >
-      <div style={{ maxWidth: 900, margin: '0 auto' }}>
+      <div style={{ maxWidth, margin: '0 auto' }}>
         <div
           className={`chat-input-wrapper ${isFocused ? 'is-focused' : ''} ${isStreaming ? 'is-streaming' : ''}`}
           style={{
