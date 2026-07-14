@@ -1,5 +1,5 @@
 import { motion, type Variants } from 'framer-motion'
-import { BookOpen, Code, PencilSimple, Sparkle, Translate } from '@phosphor-icons/react'
+import { Article, BookOpen, Code, FileText, PresentationChart, Sparkle, Student } from '@phosphor-icons/react'
 import { ChatInput, type ChatInputHandle } from './ChatInput'
 import { Typewriter } from './Typewriter'
 import { XiaojinLogo } from './XiaojinLogo'
@@ -28,27 +28,39 @@ const TYPEWRITER_PHRASES = [
 const QUICK_ACTIONS = [
   {
     icon: BookOpen,
-    title: '起草教案',
-    description: '输入年级和科目，快速生成教案框架',
-    prompt: '帮我起草一份小学三年级数学教案，包含教学目标、重难点和课堂活动',
+    title: '课程大纲',
+    description: '设计大学课程目标、章节与考核方式',
+    prompt: '帮我设计一份大学课程教学大纲，包含课程目标、章节安排、重点难点和考核方式。课程：',
   },
   {
-    icon: PencilSimple,
-    title: '批改作文',
-    description: '粘贴学生作文，自动批改并给出建议',
-    prompt: '请帮我批改这篇作文，指出语法、用词和结构上的问题，并给出改进建议',
+    icon: PresentationChart,
+    title: '课件大纲',
+    description: '为课堂章节生成 PPT/课件结构',
+    prompt: '帮我为大学课程的一个章节制作课件大纲，列出核心知识点、典型案例和课堂讨论问题。课程/章节：',
+  },
+  {
+    icon: Article,
+    title: '学术写作',
+    description: '审阅论文/报告逻辑、表达与规范',
+    prompt: '请帮我审阅以下学术文本（论文/研究报告片段），检查逻辑结构、语言表达和引用规范，并给出修改建议：',
+  },
+  {
+    icon: FileText,
+    title: '文档处理',
+    description: '总结、润色或修正各类文档',
+    prompt: '请帮我处理以下文档：提炼核心观点、总结关键内容、修正语言表述和格式问题：',
+  },
+  {
+    icon: Student,
+    title: '学生反馈',
+    description: '为作业/项目写综合性评语',
+    prompt: '请帮我为以下学生作业/项目写一段综合评语，指出亮点和可改进之处，语气专业且鼓励性：',
   },
   {
     icon: Code,
-    title: '审查代码',
-    description: '粘贴代码，找出潜在 bug 和优化点',
-    prompt: '请帮我审查这段代码，找出潜在的 bug、性能问题和可优化的地方',
-  },
-  {
-    icon: Translate,
-    title: '翻译文本',
-    description: '中英文互译，保持专业术语准确',
-    prompt: '请把这段英文翻译成中文，保持专业术语准确，语言通顺自然',
+    title: '代码/数据',
+    description: '检查代码、脚本或数据分析问题',
+    prompt: '请帮我检查以下代码或数据分析脚本，找出潜在错误、性能问题和可优化之处：',
   },
 ]
 
@@ -151,7 +163,7 @@ export function WelcomeScreen({ chatInputRef, onSend, institution }: Props) {
         </motion.div>
 
         {/* Quick action cards (Bento grid) */}
-        <motion.div variants={item} className="w-full max-w-2xl grid grid-cols-1 sm:grid-cols-2 gap-3 mb-8">
+        <motion.div variants={item} className="w-full max-w-3xl grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-8">
           {QUICK_ACTIONS.map((action) => {
             const Icon = action.icon
             return (
