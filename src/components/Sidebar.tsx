@@ -624,6 +624,10 @@ function getSessionTitle(session: SessionInfo): string {
   return session.name || session.firstMessage || session.id.slice(0, 12)
 }
 
+function getSessionDisplayTitle(session: SessionInfo): string {
+  return session.name || session.firstMessage || '新会话'
+}
+
 function formatSessionToMarkdown(session: SessionInfo, messages: WebMessage[]): string {
   const title = getSessionTitle(session)
   const lines: string[] = []
@@ -797,7 +801,8 @@ function SessionItem({ session, isSelected, onClick, onDelete, onRename, onPin, 
   const [editing, setEditing] = useState(false)
   const [shareMode, setShareMode] = useState(false)
   const title = getSessionTitle(session)
-  const [draftTitle, setDraftTitle] = useState(title)
+  const displayTitle = getSessionDisplayTitle(session)
+  const [draftTitle, setDraftTitle] = useState(displayTitle)
   const menuRef = useRef<HTMLDivElement>(null)
   const triggerRef = useRef<HTMLButtonElement>(null)
 
@@ -856,7 +861,7 @@ function SessionItem({ session, isSelected, onClick, onDelete, onRename, onPin, 
   function submitRename() {
     const next = draftTitle.trim()
     setEditing(false)
-    if (next && next !== title) onRename?.(next)
+    if (next && next !== displayTitle) onRename?.(next)
   }
 
   const detailTitle = [
@@ -931,7 +936,7 @@ function SessionItem({ session, isSelected, onClick, onDelete, onRename, onPin, 
               onBlur={submitRename}
               onKeyDown={(e) => {
                 if (e.key === 'Enter') submitRename()
-                if (e.key === 'Escape') { setDraftTitle(title); setEditing(false) }
+                if (e.key === 'Escape') { setDraftTitle(displayTitle); setEditing(false) }
               }}
               style={{
                 flex: 1, minWidth: 0, boxSizing: 'border-box',
@@ -943,7 +948,7 @@ function SessionItem({ session, isSelected, onClick, onDelete, onRename, onPin, 
             />
           ) : (
             <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {title}
+              {displayTitle}
             </span>
           )}
           {!editing && session.orphaned && (
@@ -1036,7 +1041,7 @@ function SessionItem({ session, isSelected, onClick, onDelete, onRename, onPin, 
                   </svg>
                   分享
                 </MenuButton>
-                <MenuButton onClick={(e) => { e.stopPropagation(); setMenuOpen(false); setDraftTitle(title); setEditing(true) }}>
+                <MenuButton onClick={(e) => { e.stopPropagation(); setMenuOpen(false); setDraftTitle(displayTitle); setEditing(true) }}>
                   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
                   </svg>
