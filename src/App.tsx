@@ -223,6 +223,7 @@ export default function App() {
               sessionsLoading={sessionsLoading}
               onToast={(message, type) => setToast({ message, type })}
               onRefreshSessions={refreshSessions}
+              onOpenSettings={() => setSettingsOpen(true)}
             />
           </div>
         </div>

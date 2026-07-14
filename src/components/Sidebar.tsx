@@ -28,6 +28,7 @@ interface Props {
   sessionsLoading?: boolean
   onToast?: (message: string, type?: 'success' | 'error') => void
   onRefreshSessions?: () => void
+  onOpenSettings?: () => void
 }
 
 function formatRelativeTime(dateStr: string): string {
@@ -129,7 +130,7 @@ const SKILLS: SkillDef[] = [
   { id: 'skill-creator', name: '技能创建', desc: '自定义新技能与工具' },
 ]
 
-export function Sidebar({ sessions, selectedId, onSelectSession, onNewSession, sessionLoadError, sessionsLoading, onDeleteSession, onRenameSession, onPinSession, pinnedIds, onToast, onRefreshSessions }: Props) {
+export function Sidebar({ sessions, selectedId, onSelectSession, onNewSession, sessionLoadError, sessionsLoading, onDeleteSession, onRenameSession, onPinSession, pinnedIds, onToast, onRefreshSessions, onOpenSettings }: Props) {
   const [activeNav, setActiveNav] = useState<NavId>('chat')
   const [sessionsCollapsed, setSessionsCollapsed] = useState(false)
   const [skillsCollapsed, setSkillsCollapsed] = useState(false)
@@ -554,6 +555,7 @@ export function Sidebar({ sessions, selectedId, onSelectSession, onNewSession, s
         onMenuOpenChange={setUserMenuOpen}
         editing={editingProfile}
         onEditingChange={setEditingProfile}
+        onOpenSettings={onOpenSettings}
       />
     </div>
   )
@@ -1418,6 +1420,7 @@ function UserProfileBar({
   onMenuOpenChange,
   editing,
   onEditingChange,
+  onOpenSettings,
 }: {
   profile: UserProfile
   onProfileChange: (p: UserProfile) => void
@@ -1425,6 +1428,7 @@ function UserProfileBar({
   onMenuOpenChange: (v: boolean) => void
   editing: boolean
   onEditingChange: (v: boolean) => void
+  onOpenSettings?: () => void
 }) {
   const isLoggedIn = profile.name.trim().length > 0
   const displayName = isLoggedIn ? profile.name.slice(0, MAX_USERNAME_LEN) : '点击登录'
@@ -1532,7 +1536,7 @@ function UserProfileBar({
               个人资料
             </button>
             <button
-              onClick={() => { onMenuOpenChange(false) }}
+              onClick={() => { onMenuOpenChange(false); onOpenSettings?.() }}
               style={menuItemStyle}
               onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg-hover)' }}
               onMouseLeave={(e) => { e.currentTarget.style.background = 'none' }}
