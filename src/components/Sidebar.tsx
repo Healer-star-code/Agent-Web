@@ -134,6 +134,10 @@ export function Sidebar({ sessions, selectedId, onSelectSession, onNewSession, s
   const [sessionsCollapsed, setSessionsCollapsed] = useState(false)
   const [skillsCollapsed, setSkillsCollapsed] = useState(false)
   const [search, setSearch] = useState('')
+  const [debouncedSearch, setDebouncedSearch] = useState('')
+  const [searchingMessages, setSearchingMessages] = useState(false)
+  const messageSearchIndexRef = useRef<Map<string, string>>(new Map())
+  const [searchVersion, setSearchVersion] = useState(0)
   const [userProfile, setUserProfile] = useState<UserProfile>(() => {
     try {
       const raw = localStorage.getItem(USER_PROFILE_KEY)
@@ -163,17 +167,76 @@ export function Sidebar({ sessions, selectedId, onSelectSession, onNewSession, s
     } catch { /* ignore */ }
   }, [userProfile])
 
-  const filteredSessions = useMemo(() => {
-    let list = sessions
-    const q = search.trim().toLowerCase()
-    if (q) {
-      list = list.filter((s) => {
-        const text = `${s.name ?? ''} ${s.firstMessage ?? ''} ${s.cwd ?? ''} ${s.model?.provider ?? ''} ${s.model?.modelId ?? ''}`.toLowerCase()
-        return text.includes(q)
-      })
+  // 搜索防抖：用户停止输入 300ms 后再触发消息内容搜索
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(search.trim()), 300)
+    return () => clearTimeout(timer)
+  }, [search])
+
+  // 清空搜索时重置消息索引
+  useEffect(() => {
+    if (!debouncedSearch.trim()) {
+      messageSearchIndexRef.current = new Map()
+      setSearchVersion(0)
+      setSearchingMessages(false)
     }
-    return list
-  }, [sessions, search])
+  }, [debouncedSearch])
+
+  // 对标题未命中的会话加载消息内容并建立搜索索引
+  useEffect(() => {
+    const q = debouncedSearch.trim().toLowerCase()
+    if (!q) return
+
+    const sessionsToSearch = sessions.filter((s) => {
+      const titleText = `${s.name ?? ''} ${s.firstMessage ?? ''} ${s.cwd ?? ''}`.toLowerCase()
+      const titleMatch = titleText.includes(q)
+      return !titleMatch && !messageSearchIndexRef.current.has(s.id)
+    })
+
+    if (sessionsToSearch.length === 0) return
+
+    let cancelled = false
+    let completed = 0
+    setSearchingMessages(true)
+
+    sessionsToSearch.forEach((session) => {
+      getMessages(session.id).then((messages) => {
+        if (cancelled) return
+        const text = messages
+          .map((msg) => `${msg.role}: ${msg.content ?? ''}`)
+          .join('\n')
+          .toLowerCase()
+        messageSearchIndexRef.current.set(session.id, text)
+        completed++
+        if (completed === sessionsToSearch.length) setSearchingMessages(false)
+        setSearchVersion((v) => v + 1)
+      }).catch(() => {
+        if (cancelled) return
+        completed++
+        if (completed === sessionsToSearch.length) setSearchingMessages(false)
+      })
+    })
+
+    return () => { cancelled = true }
+  }, [debouncedSearch, sessions])
+
+  const filteredSessions = useMemo(() => {
+    const q = debouncedSearch.trim().toLowerCase()
+    if (!q) return sessions
+
+    const titleMatches = sessions.filter((s) => {
+      const text = `${s.name ?? ''} ${s.firstMessage ?? ''} ${s.cwd ?? ''} ${s.model?.provider ?? ''} ${s.model?.modelId ?? ''}`.toLowerCase()
+      return text.includes(q)
+    })
+
+    const messageMatches = sessions.filter((s) => {
+      if (titleMatches.some((m) => m.id === s.id)) return false
+      const indexText = messageSearchIndexRef.current.get(s.id)
+      return indexText && indexText.includes(q)
+    })
+
+    return [...titleMatches, ...messageMatches]
+  }, [sessions, debouncedSearch, searchVersion])
 
   const sessionTree = useMemo(() => buildSessionTree(filteredSessions, pinnedIds), [filteredSessions, pinnedIds])
 
@@ -247,12 +310,14 @@ export function Sidebar({ sessions, selectedId, onSelectSession, onNewSession, s
                 <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
               </svg>
               <div style={{ fontSize: 'var(--font-sm)', fontWeight: 500, marginBottom: 4, color: 'var(--text)' }}>
-                {sessionLoadError ? '暂时连接不上' : '暂无会话'}
+                {sessionLoadError ? '暂时连接不上' : searchingMessages ? '正在搜索消息内容…' : '暂无会话'}
               </div>
               <div style={{ fontSize: 'var(--font-xs)', lineHeight: 1.5, marginBottom: sessionLoadError ? 10 : 0 }}>
                 {sessionLoadError
                   ? '还没连上超级小金服务。请检查服务是否已启动、地址和密码是否填对。'
-                  : '点击「新建对话」开始'}
+                  : searchingMessages
+                    ? '正在加载历史消息内容，请稍等。'
+                    : '点击「新建对话」开始'}
               </div>
               {sessionLoadError && onRefreshSessions && (
                 <button
@@ -347,6 +412,11 @@ export function Sidebar({ sessions, selectedId, onSelectSession, onNewSession, s
                 </button>
               )}
             </div>
+            {searchingMessages && debouncedSearch && (
+              <div style={{ padding: '0 10px 6px', fontSize: 'var(--font-xs)', color: 'var(--text-muted)' }}>
+                正在搜索历史消息内容…
+              </div>
+            )}
             {sessionListSection}
           </div>
         )
