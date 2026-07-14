@@ -158,7 +158,7 @@ export function WelcomeScreen({ chatInputRef, onSend, institution }: Props) {
               <motion.button
                 key={action.title}
                 type="button"
-                onClick={() => onSend(action.prompt)}
+                onClick={() => chatInputRef.current?.insertText(action.prompt)}
                 className="group text-left p-4 rounded-xl border border-app-border bg-app-panel hover:bg-app-hover hover:border-accent/30 transition-all duration-200"
                 whileHover={{ y: -2 }}
                 whileTap={{ scale: 0.98 }}
