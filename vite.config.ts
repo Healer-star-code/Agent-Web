@@ -25,12 +25,6 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/superking-api/, ''),
       },
-      '/auth-api': {
-        target: 'https://7960db9e.r8.cpolar.cn',
-        changeOrigin: true,
-        secure: true,
-        rewrite: (path) => path.replace(/^\/auth-api/, ''),
-      },
     },
   },
 })
