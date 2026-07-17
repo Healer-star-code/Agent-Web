@@ -46,22 +46,35 @@ function kindLabel(kind: ArtifactInfo['kind'], name: string): string {
 }
 
 export function AttachmentCard({ attachment, compact = false }: { attachment: MessageAttachment; compact?: boolean }) {
+  const hasUrl = !!attachment.url
   if (attachment.type === 'image') {
+    if (!hasUrl) {
+      return (
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: compact ? 54 : 160, height: compact ? 54 : 160, borderRadius: 'var(--radius-md)', overflow: 'hidden', border: '1px solid var(--border)', background: 'var(--bg-panel)' }}>
+          {getFileIcon(attachment.name, compact ? 22 : 28)}
+        </div>
+      )
+    }
     return (
       <a href={attachment.url} target="_blank" rel="noreferrer" style={{ display: 'block', width: compact ? 54 : 160, height: compact ? 54 : 160, borderRadius: 'var(--radius-md)', overflow: 'hidden', border: '1px solid rgba(59,130,246,0.2)', background: 'rgba(0,0,0,0.04)' }}>
         <img src={attachment.url} alt={attachment.name} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
       </a>
     )
   }
-  return (
-    <a href={attachment.url} download={attachment.name} style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: compact ? 130 : 220, maxWidth: compact ? 180 : 320, padding: compact ? '6px 8px' : '9px 10px', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border)', background: 'var(--bg)', color: 'var(--text)', textDecoration: 'none' }}>
+  const cardStyle: React.CSSProperties = { display: 'flex', alignItems: 'center', gap: 8, minWidth: compact ? 130 : 220, maxWidth: compact ? 180 : 320, padding: compact ? '6px 8px' : '9px 10px', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border)', background: 'var(--bg)', color: 'var(--text)', textDecoration: 'none' }
+  const inner = (
+    <>
       <span style={{ flexShrink: 0 }}>{getFileIcon(attachment.name, compact ? 22 : 28)}</span>
       <span style={{ minWidth: 0, flex: 1 }}>
         <span style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: compact ? 'var(--font-xs)' : 'calc(var(--font-base) * 0.929)', fontWeight: 650 }}>{attachment.name}</span>
         <span style={{ display: 'block', fontSize: 'var(--font-xs)', color: 'var(--text-dim)', marginTop: 1 }}>{extLabel(attachment.name)} {attachment.size ? `· ${formatBytes(attachment.size)}` : ''}</span>
       </span>
-    </a>
+    </>
   )
+  if (!hasUrl) {
+    return <div style={cardStyle}>{inner}</div>
+  }
+  return <a href={attachment.url} download={attachment.name} style={cardStyle}>{inner}</a>
 }
 
 export function ArtifactCard({ artifact, hideActions = false }: { artifact: ArtifactInfo; hideActions?: boolean }) {

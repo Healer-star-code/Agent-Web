@@ -810,8 +810,8 @@ function convertSuperKingMessages(messages: SuperKingMessage[], cwd?: string): W
     if (webMsg.role === 'user' && webMsg.content) {
       const { cleanContent, detectedUploads } = stripSystemPrompt(webMsg.content)
       webMsg.content = cleanContent
-      if (detectedUploads.length > 0 && cwd) {
-        webMsg.attachments = detectedUploads.map((u, i) => buildAttachmentFromUpload(u, cwd, msg.timestamp, i))
+      if (detectedUploads.length > 0) {
+        webMsg.attachments = detectedUploads.map((u, i) => buildAttachmentFromUpload(u, cwd ?? '', msg.timestamp, i))
       }
     }
 
@@ -826,20 +826,32 @@ export function stripSystemPrompt(content: string): {
   detectedUploads: { name: string; relPath: string }[]
 } {
   if (!content) return { cleanContent: content, detectedUploads: [] }
-  const re = /\n\[系统：(?:已为你上传以下附件|用户附了|以下附件上传失败)/
+  // 匹配所有 [系统： 开头的块（新格式"用户上传了" + 旧格式）
+  const re = /\n\[系统：/
   const m = re.exec(content)
   if (!m) return { cleanContent: content, detectedUploads: [] }
   const idx = m.index
   const cleanContent = content.slice(0, idx).replace(/\s+$/, '')
   const systemPart = content.slice(idx)
   const detectedUploads: { name: string; relPath: string }[] = []
-  const lineRe = /^-\s+(.+?)\s+(?:→|->)\s+([.\w\-/\\][^\n\r]*)$/gm
+
+  // 新格式：[系统：用户上传了 xxx.docx，文件内容如下...]
+  const newNameRe = /\[系统：用户上传了 (.+?)，/g
+  let nm: RegExpExecArray | null
+  while ((nm = newNameRe.exec(systemPart)) !== null) {
+    const name = nm[1]?.trim()
+    if (name) detectedUploads.push({ name, relPath: '' })
+  }
+
+  // 旧格式：- xxx.docx -> .uploads/xxx.docx
+  const lineRe = /^-\s+(.+?)\s+(?:->|->)\s+([.\w\-/\\][^\n\r]*)$/gm
   let lm: RegExpExecArray | null
   while ((lm = lineRe.exec(systemPart)) !== null) {
     const name = lm[1]?.trim()
     const relPath = lm[2]?.trim()
     if (name && relPath) detectedUploads.push({ name, relPath })
   }
+
   return { cleanContent, detectedUploads }
 }
 
@@ -849,9 +861,6 @@ function buildAttachmentFromUpload(
   msgTimestamp: number,
   idx: number,
 ): import('../mockData').MessageAttachment {
-  const relWin = upload.relPath.replace(/\//g, '\\').replace(/^[\\]+/, '')
-  const cwdWin = cwd.replace(/\//g, '\\').replace(/[\\]+$/, '')
-  const absPath = /^[A-Za-z]:\\/.test(relWin) ? relWin : `${cwdWin}\\${relWin}`
   const lower = upload.name.toLowerCase()
   const type: import('../mockData').MessageAttachment['type'] =
     /\.(png|jpg|jpeg|gif|webp|svg|bmp|ico|tiff|tif|avif)$/.test(lower) ? 'image'
@@ -861,13 +870,19 @@ function buildAttachmentFromUpload(
             : /\.(xls|xlsx|csv)$/.test(lower) ? 'spreadsheet'
               : /\.(txt|md|mdx|log|rtf)$/.test(lower) ? 'text'
                 : 'file'
-  return {
+  const attachment: import('../mockData').MessageAttachment = {
     id: msgTimestamp * 100 + idx,
     name: upload.name,
     url: '',
     type,
-    localPath: absPath,
   }
+  // 只有有 relPath 时才构建 localPath（浏览器模式 relPath 为空）
+  if (upload.relPath) {
+    const relWin = upload.relPath.replace(/\//g, '\\').replace(/^[\\]+/, '')
+    const cwdWin = cwd.replace(/\//g, '\\').replace(/[\\]+$/, '')
+    attachment.localPath = /^[A-Za-z]:\\/.test(relWin) ? relWin : `${cwdWin}\\${relWin}`
+  }
+  return attachment
 }
 
 function generateMessageId(timestamp?: number): string {
