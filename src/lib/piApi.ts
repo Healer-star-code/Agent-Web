@@ -805,13 +805,28 @@ function convertSuperKingMessages(messages: SuperKingMessage[], cwd?: string): W
         webMsg.toolCalls!.push(tc)
         runningToolCalls.set(c.id, tc)
       }
+      // 后端图片格式：{ name, mimeType, data }（没有 type 字段）
+      const ci = c as unknown as Record<string, unknown>
+      if ((!ci.type || ci.type === 'image') && ci.mimeType && ci.data) {
+        if (!webMsg.attachments) webMsg.attachments = []
+        const mimeType = ci.mimeType as string
+        const ext = mimeType.split('/')[1] ?? 'png'
+        webMsg.attachments.push({
+          id: msg.timestamp * 100 + webMsg.attachments.length,
+          name: (ci.name as string) ?? `image-${webMsg.attachments.length + 1}.${ext}`,
+          url: `data:${mimeType};base64,${ci.data}`,
+          type: 'image',
+          isImage: true,
+        })
+      }
     }
 
     if (webMsg.role === 'user' && webMsg.content) {
       const { cleanContent, detectedUploads } = stripSystemPrompt(webMsg.content)
       webMsg.content = cleanContent
       if (detectedUploads.length > 0) {
-        webMsg.attachments = detectedUploads.map((u, i) => buildAttachmentFromUpload(u, cwd ?? '', msg.timestamp, i))
+        const docAttachments = detectedUploads.map((u, i) => buildAttachmentFromUpload(u, cwd ?? '', msg.timestamp, i))
+        webMsg.attachments = [...(webMsg.attachments ?? []), ...docAttachments]
       }
     }
 
