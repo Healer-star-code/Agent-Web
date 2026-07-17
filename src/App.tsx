@@ -14,7 +14,7 @@ import {
 import { upsertSession } from './lib/sessionState'
 
 function pickDefaultServerUrl(): string {
-  return 'http://127.0.0.1:3000'
+  return 'http://192.168.157.117:3000'
 }
 
 const APP_INSTITUTION = (import.meta.env.VITE_APP_INSTITUTION as string | undefined) ?? `v${__APP_VERSION__}`

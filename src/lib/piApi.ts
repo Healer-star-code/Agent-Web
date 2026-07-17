@@ -85,7 +85,7 @@ export type WebAgentEvent =
   | { type: 'agent_end' }
   | { type: 'error'; message: string }
 
-export const DEFAULT_API_BASE = 'http://127.0.0.1:3000'
+export const DEFAULT_API_BASE = 'http://192.168.157.117:3000'
 const LS_SERVER_URL = 'pi-server-url-v080'
 const OLD_LS_SERVER_URL = 'pi-server-url'
 
@@ -101,7 +101,14 @@ export function getApiBase(): string {
       localStorage.setItem(LS_SERVER_URL, old)
     }
     const fromLs = localStorage.getItem(LS_SERVER_URL)
-    if (fromLs && isValidApiBase(fromLs)) return fromLs
+    if (fromLs && isValidApiBase(fromLs)) {
+      // 迁移旧的 localhost 地址到新服务器
+      if (fromLs === 'http://127.0.0.1:3000' || fromLs === 'http://localhost:3000') {
+        localStorage.setItem(LS_SERVER_URL, DEFAULT_API_BASE)
+        return DEFAULT_API_BASE
+      }
+      return fromLs
+    }
   } catch { /* ignore */ }
   const envBase = import.meta.env.VITE_PI_API_BASE as string | undefined
   if (envBase && isValidApiBase(envBase)) return envBase
