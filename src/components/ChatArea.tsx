@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import type { SessionInfo, Message, MessageAttachment, LocalAttachment, AgentStep, ArtifactInfo } from '../mockData'
+import { extractFileContent } from '../lib/fileContentExtractor'
 
 type ChatSessionState = {
   messages: Message[]
@@ -1238,10 +1239,10 @@ if (normalized.length > 0 && !sdkSessionInfoRef.current?.firstMessage && onSessi
       sdkSessionInfoRef.current = updatedSession
       onSessionCreated?.(updatedSession)
 
-      // ---- 附件处理：图片 base64 / 文档复制到 <cwd>/.uploads/ ----
-      const ready = (attachments ?? []).filter((a) => a.status === 'ready' && a.tempPath)
+      // ---- 附件处理：图片 base64 / 文档前端解析提取文本 ----
+      const ready = (attachments ?? []).filter((a) => a.status === 'ready')
       const images: ApiImagePayload[] = []
-      const docFiles: { name: string; relPath: string; absPath: string }[] = []
+      const docContents: { name: string; content: string; error?: string }[] = []
       let uploadFailedNotice: string[] = []
 
       if (ready.length > 0) {
@@ -1263,19 +1264,29 @@ if (normalized.length > 0 && !sdkSessionInfoRef.current?.firstMessage && onSessi
               uploadFailedNotice.push(`${att.name}（读取失败）`)
             }
           } else {
-            uploadFailedNotice.push(`${att.name}（浏览器模式下文档文件暂不支持本地路径上传，请改用 @ 文件引用）`)
+            const extracted = await extractFileContent(att.file)
+            docContents.push({ name: att.name, content: extracted.text, error: extracted.error })
           }
         }
       }
 
-      // ---- 拼接 message：透明插入附件指引，让 agent 知道去 .uploads/ 读 ----
+      // ---- 拼接 message：把文档文本透明插入，让 agent 能读到文件内容 ----
       let finalMessage = text
       const promptLines: string[] = []
-      if (docFiles.length > 0) {
+      if (docContents.length > 0) {
         promptLines.push('')
-        promptLines.push('[系统：已为你上传以下附件到本会话工作目录]')
-        for (const f of docFiles) promptLines.push(`- ${f.name} → ${f.relPath}`)
-        promptLines.push('请使用 read 等工具读取文件内容后回答用户问题。')
+        for (const doc of docContents) {
+          if (doc.error) {
+            promptLines.push(`[系统：用户上传了 ${doc.name}，但${doc.error}]`)
+          } else if (doc.content) {
+            promptLines.push(`[系统：用户上传了 ${doc.name}，文件内容如下，请基于此内容回答用户问题：]`)
+            promptLines.push('```')
+            promptLines.push(doc.content)
+            promptLines.push('```')
+          } else {
+            promptLines.push(`[系统：用户上传了 ${doc.name}，但文件内容为空]`)
+          }
+        }
       }
       if (images.length > 0) {
         promptLines.push('')
@@ -1289,9 +1300,8 @@ if (normalized.length > 0 && !sdkSessionInfoRef.current?.firstMessage && onSessi
         finalMessage = text + '\n' + promptLines.join('\n')
       }
 
-      // ---- 把 absPath 回填进 userMsg.attachments[i].localPath，让历史卡片走 ArtifactCard ----
-      if (docFiles.length > 0 || images.length > 0) {
-        const docMap = new Map(docFiles.map((d) => [d.name, d.absPath]))
+      // ---- 标记图片附件，让历史卡片正确显示 ----
+      if (images.length > 0) {
         setMessages((prev) => prev.map((m) => {
           if (m.id !== userMsg.id) return m
           if (!m.attachments) return m
@@ -1299,7 +1309,6 @@ if (normalized.length > 0 && !sdkSessionInfoRef.current?.firstMessage && onSessi
             ...m,
             attachments: m.attachments.map((a) => ({
               ...a,
-              localPath: docMap.get(a.name) ?? a.localPath,
               isImage: a.type === 'image' ? true : a.isImage,
             })),
           }
