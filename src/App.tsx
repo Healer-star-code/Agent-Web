@@ -221,24 +221,33 @@ export default function App() {
 
   const handleSessionCreated = useCallback((session: SessionInfo) => {
     setSessions((current) => upsertSession(current, session))
-    // 同步更新当前选中会话的标题，避免 session_renamed 后主界面/侧边栏标题还是旧 ID
     setSelectedSession((current) => {
-      if (current?.id !== session.id) return current
-      return {
-        ...current,
-        ...session,
-        firstMessage: session.firstMessage ?? current.firstMessage,
-        name: session.name ?? current.name,
+      if (current?.id === session.id) {
+        return {
+          ...current,
+          ...session,
+          firstMessage: session.firstMessage ?? current.firstMessage,
+          name: session.name ?? current.name,
+        }
       }
+      // 新建会话发消息场景：当前没有选中会话 -> 选中新创建的会话
+      if (!current) {
+        try { localStorage.setItem('pi-last-session-id', session.id) } catch { /* ignore */ }
+        return session
+      }
+      return current
     })
+    // 新建会话变成正式会话后清掉占位状态
+    setNewSessionCwd(null)
   }, [])
 
   const handleRenameSession = useCallback(async (session: SessionInfo, name: string) => {
     try {
-      const renamed = await renameSession(session.id, name, session.cwd)
-      const merged = { ...renamed, cwd: session.cwd }
-      setSessions((current) => upsertSession(current, { ...session, ...merged }))
-      setSelectedSession((current) => current?.id === session.id ? { ...current!, ...merged } : current)
+      await renameSession(session.id, name, session.cwd)
+      // 后端 PATCH 成功，但 getSession 读不到 sessionName，直接用传入的 name 更新前端
+      const updated = { ...session, name, firstMessage: name }
+      setSessions((current) => upsertSession(current, updated))
+      setSelectedSession((current) => current?.id === session.id ? { ...current!, name, firstMessage: name } : current)
     } catch (err) {
       setToast({ message: '重命名失败：' + (err instanceof Error ? err.message : String(err)), type: 'error' })
     }
