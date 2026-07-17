@@ -331,20 +331,17 @@ interface SuperKingMessage {
 // Session APIs (v0.80)
 // ---------------------------------------------------------------------------
 
-export async function createSession(cwd?: string, _sessionFile?: string): Promise<WebSessionInfo> {
+export async function createSession(_cwd?: string, _sessionFile?: string): Promise<WebSessionInfo> {
   const data = await requestJson<SuperKingSessionCreateResponse>('/sessions', {
     method: 'POST',
-    body: JSON.stringify(cwd ? { cwd } : {}),
+    body: JSON.stringify({}),
   })
-  return convertSession({ id: data.id, createdAt: new Date().toISOString(), lastActivityAt: new Date().toISOString(), state: data.state }, cwd)
+  return convertSession({ id: data.id, createdAt: new Date().toISOString(), lastActivityAt: new Date().toISOString(), state: data.state }, _cwd)
 }
 
-export async function listSessions(cwd?: string): Promise<WebSessionInfo[]> {
-  const params = new URLSearchParams()
-  if (cwd) params.set('cwd', cwd)
-  const query = params.toString()
-  const data = await requestJson<{ sessions: SuperKingSessionListItem[] }>(`/sessions${query ? `?${query}` : ''}`)
-  return data.sessions.map((s) => convertSession(s, cwd))
+export async function listSessions(_cwd?: string): Promise<WebSessionInfo[]> {
+  const data = await requestJson<{ sessions: SuperKingSessionListItem[] }>(`/sessions`)
+  return data.sessions.map((s) => convertSession(s, _cwd))
 }
 
 export async function getSession(sessionId: string): Promise<WebSessionInfo> {
