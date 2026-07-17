@@ -182,12 +182,25 @@ export default function App() {
   const handleSelectSession = useCallback((session: SessionInfo) => {
     setNewSessionCwd(null)
     setSelectedSession(session)
+    try { localStorage.setItem('pi-last-session-id', session.id) } catch { /* ignore */ }
   }, [])
 
   const handleNewSession = useCallback(() => {
     setSelectedSession(null)
     setNewSessionCwd(selectedCwd)
+    try { localStorage.removeItem('pi-last-session-id') } catch { /* ignore */ }
   }, [selectedCwd])
+
+  // 刷新后恢复上次选中的会话：等 sessions 列表加载完，从里面找 last-session-id
+  useEffect(() => {
+    if (sessions.length === 0 || selectedSession !== null || newSessionCwd !== null) return
+    try {
+      const lastId = localStorage.getItem('pi-last-session-id')
+      if (!lastId) return
+      const found = sessions.find((s) => s.id === lastId)
+      if (found) setSelectedSession(found)
+    } catch { /* ignore */ }
+  }, [sessions, selectedSession, newSessionCwd])
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -250,6 +263,7 @@ export default function App() {
       if (selectedSession?.id === session.id) {
         setSelectedSession(null)
         setNewSessionCwd(session.cwd ?? selectedCwd)
+        try { localStorage.removeItem('pi-last-session-id') } catch { /* ignore */ }
       }
       setSessions((current) => current.filter((s) => s.id !== session.id))
     } catch (err) {
