@@ -187,6 +187,7 @@ function toMessageAttachments(attachments: LocalAttachment[] | undefined): Messa
 export function ChatArea({ session, selectedCwd, newSessionCwd, chatInputRef, onSessionCreated }: Props) {
   const [messages, _setMessages] = useState<Message[]>([])
   const [hasMessages, setHasMessages] = useState(false)
+  const [messagesLoaded, setMessagesLoaded] = useState(false)
   const [streaming, setStreaming] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -412,7 +413,8 @@ export function ChatArea({ session, selectedCwd, newSessionCwd, chatInputRef, on
       }
       messagesRef.current = saved.messages
       _setMessages(saved.messages)
-      setHasMessages(saved.hasMessages)
+      setHasMessages(saved.messages.length > 0)
+      setMessagesLoaded(true)
       setStreaming(saved.streaming)
       setError(saved.error)
       sdkSessionIdRef.current = saved.sdkSessionId
@@ -450,6 +452,7 @@ export function ChatArea({ session, selectedCwd, newSessionCwd, chatInputRef, on
     messagesRef.current = []
     _setMessages([])
     setHasMessages(false)
+    setMessagesLoaded(false)
     setStreaming(false)
     setError(null)
     sdkSessionIdRef.current = sessionId
@@ -491,6 +494,7 @@ export function ChatArea({ session, selectedCwd, newSessionCwd, chatInputRef, on
         messagesRef.current = normalized
         _setMessages(normalized)
         setHasMessages(normalized.length > 0)
+        setMessagesLoaded(true)
         forceScrollRef.current = true
       }
 
@@ -1400,6 +1404,7 @@ if (normalized.length > 0 && !sdkSessionInfoRef.current?.firstMessage && onSessi
       messagesRef.current = []
       setMessages([])
       setHasMessages(!!session)
+      setMessagesLoaded(false)
       setStreaming(false)
       setError(null)
       sdkSessionIdRef.current = null
@@ -1494,7 +1499,7 @@ if (normalized.length > 0 && !sdkSessionInfoRef.current?.firstMessage && onSessi
   const effectiveCwd = newSessionCwd ?? session?.cwd ?? selectedCwd
   const showChat = session !== null || newSessionCwd !== null
   const isEmptyNew = !!(session === null && newSessionCwd && !hasMessages)
-  const isNewSession = !!(session && !hasMessages)
+  const isNewSession = !!(session && messagesLoaded && !hasMessages)
 
   if (!showChat && !selectedCwd) {
     return (

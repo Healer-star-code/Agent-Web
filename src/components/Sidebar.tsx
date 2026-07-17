@@ -1028,10 +1028,11 @@ function SessionItem({ session, isSelected, onClick, onDelete, onRename, onPin, 
         </div>
       </div>
 
-      <div ref={menuRef} style={{ position: 'relative', flexShrink: 0 }}>
+      <div ref={menuRef} style={{ position: 'relative', flexShrink: 0 }} onMouseDown={(e) => e.stopPropagation()}>
         {(hovered || menuOpen) && !editing && (
           <button
             ref={triggerRef}
+            onMouseDown={(e) => e.stopPropagation()}
             onClick={(e) => {
               e.stopPropagation()
               if (menuOpen) {
