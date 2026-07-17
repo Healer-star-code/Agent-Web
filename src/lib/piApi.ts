@@ -191,7 +191,7 @@ export interface AuthState {
 }
 
 const AUTH_KEY = 'pi-auth'
-const AUTH_API_BASE = 'https://7960db9e.r8.cpolar.cn'
+const AUTH_API_BASE = import.meta.env.DEV ? '/auth-api' : 'https://7960db9e.r8.cpolar.cn'
 const MAX_USERNAME_LEN = 20
 
 interface LoginApiResponse {
