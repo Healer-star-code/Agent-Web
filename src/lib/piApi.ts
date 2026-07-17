@@ -177,6 +177,51 @@ async function requestJson<T>(path: string, init?: RequestInit, options?: { time
 }
 
 // ---------------------------------------------------------------------------
+// Auth (placeholder - 等待接入真实认证 API)
+// ---------------------------------------------------------------------------
+
+export interface AuthResult {
+  name: string
+}
+
+const AUTH_KEY = 'pi-auth'
+const MAX_USERNAME_LEN = 20
+
+export function getAuthUser(): string | null {
+  try {
+    const raw = localStorage.getItem(AUTH_KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as { name?: string; loggedIn?: boolean }
+    if (parsed.loggedIn && parsed.name) return parsed.name
+  } catch { /* ignore */ }
+  return null
+}
+
+export function setAuthUser(name: string): void {
+  try {
+    localStorage.setItem(AUTH_KEY, JSON.stringify({ name, loggedIn: true }))
+  } catch { /* ignore */ }
+}
+
+export function clearAuthUser(): void {
+  try {
+    localStorage.removeItem(AUTH_KEY)
+  } catch { /* ignore */ }
+}
+
+export async function login(username: string, _password: string): Promise<AuthResult> {
+  // TODO: 接入真实认证 API
+  // 当前后端 pi server 无认证接口，这里只做本地校验
+  // 后续替换为: const res = await requestJson<AuthResponse>('/auth/login', { method: 'POST', body: JSON.stringify({ username, password }) })
+  const trimmed = username.trim()
+  if (!trimmed) throw new Error('请输入账号')
+  if (!_password) throw new Error('请输入密码')
+  // 模拟网络延迟
+  await new Promise((r) => setTimeout(r, 300))
+  return { name: trimmed.slice(0, MAX_USERNAME_LEN) }
+}
+
+// ---------------------------------------------------------------------------
 // Directory selection (no longer supported by v0.80 backend; returns null)
 // ---------------------------------------------------------------------------
 

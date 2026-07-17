@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
-import { Sidebar, type UserProfile, USER_PROFILE_KEY } from './components/Sidebar'
+import { Sidebar, type UserProfile } from './components/Sidebar'
 import { ChatArea } from './components/ChatArea'
+import { LoginDialog } from './components/LoginDialog'
 import type { SessionInfo } from './mockData'
 import { SettingsPanel } from './components/SettingsPanel'
 import { ErrorBoundary } from './components/ErrorBoundary'
@@ -8,6 +9,7 @@ import { WelcomeScreen } from './components/WelcomeScreen'
 import type { ChatInputHandle } from './components/ChatInput'
 import {
   listSessions, deleteSession, renameSession, getStoredServerUrl, setStoredServerUrl,
+  getAuthUser, setAuthUser, clearAuthUser,
 } from './lib/piApi'
 import { upsertSession } from './lib/sessionState'
 
@@ -71,16 +73,8 @@ export default function App() {
     } catch { return new Set<string>() }
   })
   const [userProfile, setUserProfile] = useState<UserProfile>(() => {
-    try {
-      const raw = localStorage.getItem(USER_PROFILE_KEY)
-      if (raw) {
-        const parsed = JSON.parse(raw) as UserProfile
-        if (parsed.name && typeof parsed.name === 'string') {
-          return { name: parsed.name.slice(0, 10), email: String(parsed.email ?? '') }
-        }
-      }
-    } catch { /* ignore */ }
-    return { name: '', email: '' }
+    const name = getAuthUser()
+    return { name: name ?? '' }
   })
   const chatInputRef = useRef<ChatInputHandle | null>(null)
 
@@ -90,9 +84,18 @@ export default function App() {
     return () => clearTimeout(t)
   }, [toast])
 
-  useEffect(() => {
-    try { localStorage.setItem(USER_PROFILE_KEY, JSON.stringify(userProfile)) } catch { /* ignore */ }
-  }, [userProfile])
+  const isLoggedIn = userProfile.name.trim().length > 0
+
+  const handleLoginSuccess = useCallback((name: string) => {
+    setAuthUser(name)
+    setUserProfile({ name })
+  }, [])
+
+  const handleLogout = useCallback(() => {
+    clearAuthUser()
+    setUserProfile({ name: '' })
+    setSettingsOpen(false)
+  }, [])
 
   useEffect(() => {
     try { localStorage.setItem('pi-default-cwd', selectedCwd ?? 'E:\\\\SuperkingBackend') } catch { /* ignore */ }
@@ -238,6 +241,14 @@ export default function App() {
 
   const showChat = selectedSession !== null || newSessionCwd !== null
 
+  if (!isLoggedIn) {
+    return (
+      <ErrorBoundary>
+        <LoginDialog onSuccess={handleLoginSuccess} />
+      </ErrorBoundary>
+    )
+  }
+
   return (
     <ErrorBoundary>
     <>
@@ -270,7 +281,7 @@ export default function App() {
               onRefreshSessions={refreshSessions}
               onOpenSettings={() => setSettingsOpen(true)}
               userProfile={userProfile}
-              onProfileChange={setUserProfile}
+              onProfileChange={(p) => { if (!p.name) handleLogout() }}
             />
           </div>
         </div>
@@ -364,7 +375,7 @@ export default function App() {
           onServerUrlChange={setServerUrl}
           onClose={() => setSettingsOpen(false)}
           userProfile={userProfile}
-          onProfileChange={setUserProfile}
+          onProfileChange={(p) => { if (!p.name) handleLogout() }}
           selectedCwd={selectedCwd}
           onCwdChange={setSelectedCwd}
           language={language}

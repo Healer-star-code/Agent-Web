@@ -40,7 +40,6 @@ interface Props {
 
 const ALL_FONT_SIZES = [14, 16, 18, 20, 22]
 const DEFAULT_SIZE = 16
-const MAX_USERNAME_LEN = 10
 
 const dict = {
   zh: {
@@ -125,10 +124,6 @@ export function SettingsPanel({
 }: Props) {
   const t = useT(language)
   const [activeTab, setActiveTab] = useState<TabId>('account')
-  const [draftName, setDraftName] = useState(userProfile.name.slice(0, MAX_USERNAME_LEN))
-  const [draftEmail, setDraftEmail] = useState(userProfile.email)
-  const [isEditingProfile, setIsEditingProfile] = useState(false)
-
   const [draftServerUrl, setDraftServerUrl] = useState(serverUrl)
   const [testStatus, setTestStatus] = useState<{ loading: boolean; ok?: boolean; message?: string } | null>(null)
   const [draftTheme, setDraftTheme] = useState(isDark)
@@ -162,11 +157,6 @@ export function SettingsPanel({
       setDraftLanguage(language)
     })
   }, [serverUrl, isDark, fontSize, mode, selectedCwd, language])
-
-  useEffect(() => {
-    setDraftName(userProfile.name.slice(0, MAX_USERNAME_LEN))
-    setDraftEmail(userProfile.email)
-  }, [userProfile])
 
   useEffect(() => {
     if (activeTab !== 'models') return
@@ -212,15 +202,8 @@ export function SettingsPanel({
     onLanguageChange(draftLanguage)
   }, [draftServerUrl, draftTheme, draftFontSize, draftMode, draftCwd, draftLanguage, applyServerSettings, onThemeChange, onFontSizeChange, onModeChange, onCwdChange, onLanguageChange])
 
-  const handleSaveProfile = useCallback(() => {
-    const trimmedName = draftName.trim().slice(0, MAX_USERNAME_LEN)
-    const trimmedEmail = draftEmail.trim()
-    onProfileChange({ name: trimmedName, email: trimmedEmail })
-    setIsEditingProfile(false)
-  }, [draftName, draftEmail, onProfileChange])
-
   const handleLogout = useCallback(() => {
-    onProfileChange({ name: '', email: '' })
+    onProfileChange({ name: '' })
   }, [onProfileChange])
 
   const testConnectionHandler = useCallback(async () => {
@@ -257,54 +240,14 @@ export function SettingsPanel({
           <div style={{ fontSize: 'var(--font-lg)', fontWeight: 600, color: 'var(--text)', marginBottom: 4 }}>
             {userProfile.name || '未登录用户'}
           </div>
-          <div style={{ fontSize: 'var(--font-sm)', color: 'var(--text-muted)' }}>
-            {userProfile.email || '暂无邮箱'}
-          </div>
         </div>
       </div>
 
-      {isEditingProfile ? (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12, maxWidth: 360, marginBottom: 20 }}>
-          <div>
-            <label style={{ display: 'block', fontSize: 'var(--font-xs)', color: 'var(--text-muted)', marginBottom: 6, fontWeight: 500 }}>昵称</label>
-            <input
-              type="text"
-              value={draftName}
-              onChange={(e) => setDraftName(e.target.value.slice(0, MAX_USERNAME_LEN))}
-              placeholder="请输入昵称"
-              className="input-field"
-            />
-          </div>
-          <div>
-            <label style={{ display: 'block', fontSize: 'var(--font-xs)', color: 'var(--text-muted)', marginBottom: 6, fontWeight: 500 }}>邮箱</label>
-            <input
-              type="email"
-              value={draftEmail}
-              onChange={(e) => setDraftEmail(e.target.value)}
-              placeholder="请输入邮箱（可选）"
-              className="input-field"
-            />
-          </div>
-          <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
-            <button onClick={handleSaveProfile} className="btn-save">保存</button>
-            <button onClick={() => setIsEditingProfile(false)} className="btn-ghost">取消</button>
-          </div>
-        </div>
-      ) : (
+      {userProfile.name && (
         <div style={{ display: 'flex', gap: 10, marginBottom: 28 }}>
-          <button onClick={() => setIsEditingProfile(true)} className="btn-ghost">编辑资料</button>
-          {userProfile.name && (
-            <button onClick={handleLogout} className="btn-danger">退出登录</button>
-          )}
+          <button onClick={handleLogout} className="btn-danger">退出登录</button>
         </div>
       )}
-
-      <div style={{ padding: 16, borderRadius: 'var(--radius-lg)', background: 'var(--bg-hover)', border: '1px solid var(--border)' }}>
-        <div style={{ fontSize: 'var(--font-sm)', fontWeight: 600, color: 'var(--text)', marginBottom: 8 }}>本地账户说明</div>
-        <div style={{ fontSize: 'var(--font-xs)', color: 'var(--text-muted)', lineHeight: 1.6 }}>
-          当前为本地体验模式，账户信息仅保存在浏览器 localStorage 中。云端登录、Credits、订阅权益等功能需要后端接入 auth 服务后启用。
-        </div>
-      </div>
     </div>
   )
 

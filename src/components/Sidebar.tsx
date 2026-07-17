@@ -9,7 +9,6 @@ import { XiaojinLogo } from './XiaojinLogo'
 
 export interface UserProfile {
   name: string
-  email: string
 }
 
 export const USER_PROFILE_KEY = 'pi-user-profile-v1'
@@ -133,7 +132,7 @@ const SKILLS: SkillDef[] = [
   { id: 'skill-creator', name: '技能创建', desc: '自定义新技能与工具' },
 ]
 
-export function Sidebar({ sessions, selectedId, onSelectSession, onNewSession, sessionLoadError, sessionsLoading, onDeleteSession, onRenameSession, onPinSession, pinnedIds, onToast, onRefreshSessions, onOpenSettings, userProfile = { name: '', email: '' }, onProfileChange = () => {} }: Props) {
+export function Sidebar({ sessions, selectedId, onSelectSession, onNewSession, sessionLoadError, sessionsLoading, onDeleteSession, onRenameSession, onPinSession, pinnedIds, onToast, onRefreshSessions, onOpenSettings, userProfile = { name: '' }, onProfileChange = () => {} }: Props) {
   const [activeNav, setActiveNav] = useState<NavId>('chat')
   const [sessionsCollapsed, setSessionsCollapsed] = useState(false)
   const [skillsCollapsed, setSkillsCollapsed] = useState(false)
@@ -143,7 +142,6 @@ export function Sidebar({ sessions, selectedId, onSelectSession, onNewSession, s
   const messageSearchIndexRef = useRef<Map<string, string>>(new Map())
   const [searchVersion, setSearchVersion] = useState(0)
   const [userMenuOpen, setUserMenuOpen] = useState(false)
-  const [editingProfile, setEditingProfile] = useState(false)
   const searchRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -538,8 +536,6 @@ export function Sidebar({ sessions, selectedId, onSelectSession, onNewSession, s
         onProfileChange={onProfileChange}
         menuOpen={userMenuOpen}
         onMenuOpenChange={setUserMenuOpen}
-        editing={editingProfile}
-        onEditingChange={setEditingProfile}
         onOpenSettings={onOpenSettings}
       />
     </div>
@@ -1403,20 +1399,16 @@ function UserProfileBar({
   onProfileChange,
   menuOpen,
   onMenuOpenChange,
-  editing,
-  onEditingChange,
   onOpenSettings,
 }: {
   profile: UserProfile
   onProfileChange: (p: UserProfile) => void
   menuOpen: boolean
   onMenuOpenChange: (v: boolean) => void
-  editing: boolean
-  onEditingChange: (v: boolean) => void
   onOpenSettings?: () => void
 }) {
   const isLoggedIn = profile.name.trim().length > 0
-  const displayName = isLoggedIn ? profile.name.slice(0, MAX_USERNAME_LEN) : '点击登录'
+  const displayName = isLoggedIn ? profile.name.slice(0, MAX_USERNAME_LEN) : '未登录'
   const statusText = isLoggedIn ? '已登录' : '未登录'
   const menuRef = useRef<HTMLDivElement>(null)
 
@@ -1439,8 +1431,6 @@ function UserProfileBar({
         onClick={() => {
           if (isLoggedIn) {
             onMenuOpenChange(!menuOpen)
-          } else {
-            onEditingChange(true)
           }
         }}
         style={{
@@ -1449,11 +1439,11 @@ function UserProfileBar({
           display: 'flex',
           alignItems: 'center',
           gap: 10,
-          cursor: 'pointer',
+          cursor: isLoggedIn ? 'pointer' : 'default',
           transition: 'background 0.15s',
           flexShrink: 0,
         }}
-        onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg-hover)' }}
+        onMouseEnter={(e) => { if (isLoggedIn) e.currentTarget.style.background = 'var(--bg-hover)' }}
         onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
       >
         <Avatar name={profile.name} size={32} />
@@ -1463,21 +1453,23 @@ function UserProfileBar({
           </div>
           <div style={{ fontSize: 'var(--font-xs)', color: 'var(--text-muted)', marginTop: 1 }}>{statusText}</div>
         </div>
-        <svg
-          width="16"
-          height="16"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          style={{ color: 'var(--text-muted)', flexShrink: 0 }}
-        >
-          <circle cx="12" cy="12" r="1" />
-          <circle cx="19" cy="12" r="1" />
-          <circle cx="5" cy="12" r="1" />
-        </svg>
+        {isLoggedIn && (
+          <svg
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            style={{ color: 'var(--text-muted)', flexShrink: 0 }}
+          >
+            <circle cx="12" cy="12" r="1" />
+            <circle cx="19" cy="12" r="1" />
+            <circle cx="5" cy="12" r="1" />
+          </svg>
+        )}
       </div>
 
       {menuOpen && isLoggedIn && (
@@ -1502,24 +1494,9 @@ function UserProfileBar({
               <div style={{ fontSize: 'var(--font-sm)', fontWeight: 600, color: 'var(--text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                 {profile.name.slice(0, MAX_USERNAME_LEN)}
               </div>
-              <div style={{ fontSize: 'var(--font-xs)', color: 'var(--text-muted)', marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                {profile.email || '无邮箱'}
-              </div>
             </div>
           </div>
           <div style={{ padding: '6px 0' }}>
-            <button
-              onClick={() => { onMenuOpenChange(false); onEditingChange(true) }}
-              style={menuItemStyle}
-              onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg-hover)' }}
-              onMouseLeave={(e) => { e.currentTarget.style.background = 'none' }}
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-                <circle cx="12" cy="7" r="4" />
-              </svg>
-              个人资料
-            </button>
             <button
               onClick={() => { onMenuOpenChange(false); onOpenSettings?.() }}
               style={menuItemStyle}
@@ -1534,7 +1511,7 @@ function UserProfileBar({
             </button>
             <div style={{ height: 1, background: 'var(--border)', margin: '4px 6px' }} />
             <button
-              onClick={() => { onMenuOpenChange(false); onProfileChange({ name: '', email: '' }) }}
+              onClick={() => { onMenuOpenChange(false); onProfileChange({ name: '' }) }}
               style={{ ...menuItemStyle, color: '#ef4444' }}
               onMouseEnter={(e) => { e.currentTarget.style.background = '#fef2f2' }}
               onMouseLeave={(e) => { e.currentTarget.style.background = 'none' }}
@@ -1549,143 +1526,6 @@ function UserProfileBar({
           </div>
         </div>
       )}
-
-      {editing && (
-        <UserProfileEditDialog
-          profile={profile}
-          onSave={(p) => { onProfileChange(p); onEditingChange(false); onMenuOpenChange(false) }}
-          onCancel={() => onEditingChange(false)}
-        />
-      )}
     </>
-  )
-}
-
-function UserProfileEditDialog({
-  profile,
-  onSave,
-  onCancel,
-}: {
-  profile: UserProfile
-  onSave: (p: UserProfile) => void
-  onCancel: () => void
-}) {
-  const [name, setName] = useState(profile.name.slice(0, MAX_USERNAME_LEN))
-  const [email, setEmail] = useState(profile.email)
-  const dialogRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    function handleKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') onCancel()
-    }
-    function handleClickOutside(e: MouseEvent) {
-      const target = e.target as Node
-      if (dialogRef.current && !dialogRef.current.contains(target)) onCancel()
-    }
-    document.addEventListener('keydown', handleKey)
-    document.addEventListener('mousedown', handleClickOutside)
-    return () => {
-      document.removeEventListener('keydown', handleKey)
-      document.removeEventListener('mousedown', handleClickOutside)
-    }
-  }, [onCancel])
-
-  return (
-    <div
-      style={{
-        position: 'fixed',
-        inset: 0,
-        background: 'rgba(0,0,0,0.35)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        zIndex: 'var(--z-modal)',
-      }}
-    >
-      <div
-        ref={dialogRef}
-        style={{
-          width: 320,
-          background: 'var(--bg)',
-          border: '1px solid var(--border)',
-          borderRadius: 'var(--radius-md)',
-          padding: 20,
-          boxShadow: '0 20px 60px rgba(0,0,0,0.2)',
-        }}
-      >
-        <div style={{ fontSize: 'var(--font-md)', fontWeight: 600, color: 'var(--text)', marginBottom: 16 }}>{profile.name ? '编辑个人资料' : '登录'}</div>
-        <div style={{ marginBottom: 14 }}>
-          <div style={{ fontSize: 'var(--font-xs)', color: 'var(--text-muted)', marginBottom: 6 }}>用户名（最多 {MAX_USERNAME_LEN} 字）</div>
-          <input
-            type="text"
-            value={name}
-            maxLength={MAX_USERNAME_LEN}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="请输入用户名"
-            style={{
-              width: '100%',
-              padding: '8px 10px',
-              background: 'var(--bg)',
-              border: '1px solid var(--border)',
-              borderRadius: 'var(--radius-sm)',
-              color: 'var(--text)',
-              fontSize: 'var(--font-sm)',
-              outline: 'none',
-            }}
-          />
-        </div>
-        <div style={{ marginBottom: 20 }}>
-          <div style={{ fontSize: 'var(--font-xs)', color: 'var(--text-muted)', marginBottom: 6 }}>邮箱</div>
-          <input
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="可选"
-            style={{
-              width: '100%',
-              padding: '8px 10px',
-              background: 'var(--bg)',
-              border: '1px solid var(--border)',
-              borderRadius: 'var(--radius-sm)',
-              color: 'var(--text)',
-              fontSize: 'var(--font-sm)',
-              outline: 'none',
-            }}
-          />
-        </div>
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
-          <button
-            onClick={onCancel}
-            style={{
-              padding: '7px 14px',
-              borderRadius: 'var(--radius-sm)',
-              border: '1px solid var(--border)',
-              background: 'var(--bg)',
-              color: 'var(--text)',
-              fontSize: 'var(--font-sm)',
-              cursor: 'pointer',
-            }}
-          >取消</button>
-          <button
-            onClick={() => {
-              const trimmed = name.trim()
-              if (!trimmed) return
-              onSave({ name: trimmed.slice(0, MAX_USERNAME_LEN), email: email.trim() })
-            }}
-            disabled={!name.trim()}
-            style={{
-              padding: '7px 14px',
-              borderRadius: 'var(--radius-sm)',
-              border: 'none',
-              background: 'var(--accent)',
-              color: '#fff',
-              fontSize: 'var(--font-sm)',
-              cursor: name.trim() ? 'pointer' : 'not-allowed',
-              opacity: name.trim() ? 1 : 0.5,
-            }}
-          >保存</button>
-        </div>
-      </div>
-    </div>
   )
 }
