@@ -9,9 +9,9 @@ import { WelcomeScreen } from './components/WelcomeScreen'
 import type { ChatInputHandle } from './components/ChatInput'
 import {
   listSessions, deleteSession, renameSession, getStoredServerUrl, setStoredServerUrl,
-  getAuthUser, setAuthUser, clearAuthUser,
+  getAuthUser, setAuthUser, clearAuthUser, getMessages,
 } from './lib/piApi'
-import { upsertSession } from './lib/sessionState'
+import { upsertSession, summarizeTitle } from './lib/sessionState'
 
 function pickDefaultServerUrl(): string {
   return 'http://192.168.157.117:3000'
@@ -136,6 +136,24 @@ export default function App() {
         if (cancelled) return
         setSessions(loaded)
         setSessionLoadError(null)
+        // 服务器列表接口不返回 sessionName，对没有标题的会话批量加载第一条消息生成标题
+        const unnamed = loaded.filter((s) => !s.name && !s.firstMessage)
+        if (unnamed.length > 0) {
+          unnamed.forEach((session) => {
+            getMessages(session.id)
+              .then((messages) => {
+                if (cancelled) return
+                const firstUser = messages.find((m) => m.role === 'user')
+                if (firstUser?.content) {
+                  const title = summarizeTitle(firstUser.content.trim())
+                  setSessions((prev) => prev.map((s) =>
+                    s.id === session.id ? { ...s, name: title, firstMessage: title } : s
+                  ))
+                }
+              })
+              .catch(() => { /* skip broken sessions */ })
+          })
+        }
       })
       .catch((error) => {
         if (cancelled) return
