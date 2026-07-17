@@ -5,7 +5,7 @@ import { login } from '../lib/piApi'
 
 const MAX_USERNAME_LEN = 20
 
-export function LoginDialog({ onSuccess }: { onSuccess: (name: string) => void }) {
+export function LoginDialog({ onSuccess }: { onSuccess: (name: string, token: string) => void }) {
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
@@ -32,7 +32,7 @@ export function LoginDialog({ onSuccess }: { onSuccess: (name: string) => void }
     setLoading(true)
     try {
       const result = await login(trimmedUser, password)
-      onSuccess(result.name)
+      onSuccess(result.name, result.token)
     } catch (err) {
       setError(err instanceof Error ? err.message : '登录失败，请重试')
     } finally {

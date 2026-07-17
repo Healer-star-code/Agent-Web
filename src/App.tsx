@@ -73,8 +73,8 @@ export default function App() {
     } catch { return new Set<string>() }
   })
   const [userProfile, setUserProfile] = useState<UserProfile>(() => {
-    const name = getAuthUser()
-    return { name: name ?? '' }
+    const auth = getAuthUser()
+    return { name: auth?.name ?? '' }
   })
   const chatInputRef = useRef<ChatInputHandle | null>(null)
 
@@ -86,8 +86,8 @@ export default function App() {
 
   const isLoggedIn = userProfile.name.trim().length > 0
 
-  const handleLoginSuccess = useCallback((name: string) => {
-    setAuthUser(name)
+  const handleLoginSuccess = useCallback((name: string, token: string) => {
+    setAuthUser(name, token)
     setUserProfile({ name })
   }, [])
 
