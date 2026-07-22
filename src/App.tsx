@@ -187,7 +187,13 @@ export default function App() {
     listSessions(cwd ?? undefined)
       .then((loaded) => {
         if (cancelled) return
-        setSessions(loaded)
+        // 合并后端列表和本地已有的 session：后端可能还没返回刚创建的会话
+        setSessions((prev) => {
+          const loadedIds = new Set(loaded.map((s) => s.id))
+          const localOnly = prev.filter((s) => !loadedIds.has(s.id))
+          const merged = [...loaded, ...localOnly]
+          return merged.sort((a, b) => b.modified.localeCompare(a.modified))
+        })
         setSessionLoadError(null)
         // 服务器列表接口不返回 sessionName，对没有标题的会话批量加载第一条消息生成标题
         const unnamed = loaded.filter((s) => !s.name && !s.firstMessage)

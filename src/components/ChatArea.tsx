@@ -1446,7 +1446,11 @@ if (normalized.length > 0 && !sdkSessionInfoRef.current?.firstMessage && onSessi
     }
 
     const sid = session.id
-    void loadSessionState(sid)
+    // 如果 sdkSessionIdRef 已经指向这个 session，说明是 handleSend 里 ensureSdkSession
+    // 刚创建的，消息已在 UI 中，不需要 loadSessionState（否则会清空刚发的消息）
+    if (sdkSessionIdRef.current !== sid) {
+      void loadSessionState(sid)
+    }
 
     return () => {
       // 切走前保存当前会话状态；后台 SSE 保持连接
