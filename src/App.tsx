@@ -15,7 +15,7 @@ import { connectCaNotifications } from './lib/caNotify'
 import { upsertSession, summarizeTitle } from './lib/sessionState'
 
 function pickDefaultServerUrl(): string {
-  return 'http://192.168.157.117:3000'
+  return 'https://192.168.157.118:8443/app'
 }
 
 const APP_INSTITUTION = (import.meta.env.VITE_APP_INSTITUTION as string | undefined) ?? `v${__APP_VERSION__}`

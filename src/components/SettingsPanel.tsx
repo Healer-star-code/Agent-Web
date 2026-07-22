@@ -262,7 +262,7 @@ export function SettingsPanel({
             type="text"
             value={draftServerUrl}
             onChange={(e) => setDraftServerUrl(e.target.value)}
-            placeholder="http://127.0.0.1:3000"
+            placeholder="https://192.168.157.118:8443/app"
             className="input-field"
             style={{ flex: 1, minWidth: 220 }}
           />
@@ -468,7 +468,7 @@ export function SettingsPanel({
           <div style={{ fontSize: 'var(--font-sm)', fontWeight: 600, color: 'var(--text)', marginBottom: 8 }}>使用说明</div>
           <div style={{ fontSize: 'var(--font-sm)', color: 'var(--text-muted)', lineHeight: 1.7 }}>
             1. 点击左侧「新建对话」开始与超级小金聊天。<br />
-            2. 在系统设置中配置后端服务器地址，默认连接本地 127.0.0.1:3000。<br />
+            2. 默认连接 118 mTLS 网关，按用户路由到各自容器。<br />
             3. 发送文件、图片或文字，超级小金会帮您处理教学相关任务。<br />
             4. 历史对话会自动保存在当前工作目录中。
           </div>
