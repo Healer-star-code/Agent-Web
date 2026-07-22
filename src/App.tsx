@@ -30,7 +30,7 @@ export default function App() {
       const saved = localStorage.getItem('pi-default-cwd')
       if (saved) return saved
     } catch { /* ignore */ }
-    return 'E:\\\\SuperkingBackend'
+    return '/workspace'
   })
   const [language, setLanguage] = useState<'zh' | 'en'>(() => {
     try {
@@ -111,7 +111,7 @@ export default function App() {
   }, [])
 
   useEffect(() => {
-    try { localStorage.setItem('pi-default-cwd', selectedCwd ?? 'E:\\\\SuperkingBackend') } catch { /* ignore */ }
+    try { localStorage.setItem('pi-default-cwd', selectedCwd ?? '/workspace') } catch { /* ignore */ }
   }, [selectedCwd])
 
   useEffect(() => {

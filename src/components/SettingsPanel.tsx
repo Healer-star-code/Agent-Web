@@ -288,7 +288,7 @@ export function SettingsPanel({
           type="text"
           value={draftCwd}
           onChange={(e) => setDraftCwd(e.target.value)}
-          placeholder="E:\\SuperkingBackend"
+          placeholder="/workspace"
           className="input-field"
           style={{ width: '100%' }}
         />
