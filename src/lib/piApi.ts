@@ -297,7 +297,7 @@ export type CertCheckResult = 'ready' | 'no_cert' | 'unreachable'
 
 export async function checkCertReady(): Promise<CertCheckResult> {
   try {
-    const res = await fetch(`${GATEWAY_BASE}/health`, { method: 'GET' })
+    const res = await fetch(`${DEFAULT_API_BASE}/health`, { method: 'GET' })
     if (res.ok) return 'ready'
     return 'no_cert'
   } catch {
