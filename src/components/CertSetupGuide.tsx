@@ -212,6 +212,32 @@ export function CertSetupGuide({
           </button>
         )}
 
+        {!certPassword && (
+          <button
+            onClick={handleConfirm}
+            disabled={checking}
+            style={{
+              width: '100%',
+              padding: '11px 16px',
+              borderRadius: 'var(--radius-md)',
+              border: 'none',
+              background: 'var(--accent)',
+              color: '#fff',
+              fontSize: 'var(--font-sm)',
+              fontWeight: 600,
+              cursor: checking ? 'wait' : 'pointer',
+              opacity: checking ? 0.7 : 1,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 8,
+              transition: 'opacity 0.15s',
+            }}
+          >
+            {checking ? '正在验证证书...' : '已导入，进入系统'}
+          </button>
+        )}
+
         <button
           onClick={onBack}
           style={{
