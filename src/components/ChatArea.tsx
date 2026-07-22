@@ -1496,7 +1496,6 @@ if (normalized.length > 0 && !sdkSessionInfoRef.current?.firstMessage && onSessi
     }
   }, [messages])
 
-  const effectiveCwd = newSessionCwd ?? session?.cwd ?? selectedCwd
   const showChat = session !== null || newSessionCwd !== null
   const isEmptyNew = !!(session === null && newSessionCwd && !hasMessages)
   const isNewSession = !!(session && messagesLoaded && !hasMessages)
@@ -1576,11 +1575,6 @@ if (normalized.length > 0 && !sdkSessionInfoRef.current?.firstMessage && onSessi
         <span style={{ fontWeight: 600, color: 'var(--text)' }}>
           {session?.name || session?.firstMessage?.slice(0, 50) || '会话'}
         </span>
-        {effectiveCwd && (
-          <span style={{ fontSize: 'var(--font-xs)', color: 'var(--text-dim)', fontFamily: 'var(--font-mono)' }}>
-            {effectiveCwd}
-          </span>
-        )}
         <div style={{ flex: 1 }} />
       </div>
 

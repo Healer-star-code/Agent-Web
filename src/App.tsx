@@ -28,7 +28,13 @@ export default function App() {
   const [selectedCwd, setSelectedCwd] = useState<string | null>(() => {
     try {
       const saved = localStorage.getItem('pi-default-cwd')
-      if (saved) return saved
+      if (saved) {
+        if (/^[A-Za-z]:[\\/]/.test(saved)) {
+          localStorage.setItem('pi-default-cwd', '/workspace')
+          return '/workspace'
+        }
+        return saved
+      }
     } catch { /* ignore */ }
     return '/workspace'
   })
