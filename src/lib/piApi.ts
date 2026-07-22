@@ -264,7 +264,7 @@ export async function login(username: string, password: string): Promise<AuthRes
 // Certificate (mTLS client cert download + readiness probe)
 // ---------------------------------------------------------------------------
 
-const GATEWAY_BASE = DEFAULT_API_BASE.replace(/\/app$/, '')
+export const GATEWAY_BASE = DEFAULT_API_BASE.replace(/\/app$/, '')
 
 export interface CertificateResult {
   downloadUrl?: string
@@ -293,12 +293,15 @@ export async function getCertificate(token: string): Promise<CertificateResult> 
   return data
 }
 
-export async function checkCertReady(): Promise<boolean> {
+export type CertCheckResult = 'ready' | 'no_cert' | 'unreachable'
+
+export async function checkCertReady(): Promise<CertCheckResult> {
   try {
     const res = await fetch(`${GATEWAY_BASE}/health`, { method: 'GET' })
-    return res.ok
+    if (res.ok) return 'ready'
+    return 'no_cert'
   } catch {
-    return false
+    return 'unreachable'
   }
 }
 

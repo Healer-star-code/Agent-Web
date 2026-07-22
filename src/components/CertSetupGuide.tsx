@@ -1,17 +1,18 @@
 import { useState } from 'react'
 import { XiaojinLogo } from './XiaojinLogo'
+import { GATEWAY_BASE } from '../lib/piApi'
 
 export function CertSetupGuide({
   onRecheck,
   onBack,
   onRequestCert,
 }: {
-  onRecheck: () => Promise<boolean>
+  onRecheck: () => Promise<string>
   onBack: () => void
   onRequestCert: () => Promise<string>
 }) {
   const [checking, setChecking] = useState(false)
-  const [checkFailed, setCheckFailed] = useState(false)
+  const [checkResult, setCheckResult] = useState<string>('')
   const [requesting, setRequesting] = useState(false)
   const [certPassword, setCertPassword] = useState('')
   const [requestError, setRequestError] = useState('')
@@ -31,11 +32,11 @@ export function CertSetupGuide({
 
   async function handleConfirm() {
     setChecking(true)
-    setCheckFailed(false)
-    const ready = await onRecheck()
+    setCheckResult('')
+    const result = await onRecheck()
     setChecking(false)
-    if (!ready) {
-      setCheckFailed(true)
+    if (result !== 'ready') {
+      setCheckResult(result)
     }
   }
 
@@ -56,6 +57,8 @@ export function CertSetupGuide({
         style={{
           width: 420,
           maxWidth: 'calc(100vw - 32px)',
+          maxHeight: 'calc(100vh - 32px)',
+          overflowY: 'auto',
           background: 'var(--bg)',
           border: '1px solid var(--border)',
           borderRadius: 'var(--radius-lg)',
@@ -71,6 +74,19 @@ export function CertSetupGuide({
           <div style={{ fontSize: 'var(--font-xs)', color: 'var(--text-muted)', marginTop: 4 }}>
             证书导入引导
           </div>
+        </div>
+
+        {/* 步骤 0：信任网关证书（必须先做） */}
+        <div style={{ marginBottom: 20, padding: '12px 14px', borderRadius: 'var(--radius-md)', background: 'var(--bg-hover)', border: '1px solid var(--border)' }}>
+          <div style={{ fontSize: 'var(--font-sm)', fontWeight: 600, color: 'var(--text)', marginBottom: 6 }}>
+            前置步骤：信任网关证书
+          </div>
+          <div style={{ fontSize: 'var(--font-xs)', color: 'var(--text-muted)', marginBottom: 8, lineHeight: 1.6 }}>
+            首次使用需先在浏览器中信任网关的 HTTPS 证书。点击下方链接，在打开的页面点「高级」-&gt;「继续前往」。
+          </div>
+          <a href={`${GATEWAY_BASE}/health`} target="_blank" rel="noopener noreferrer" style={{ fontSize: 'var(--font-xs)', color: 'var(--accent)', wordBreak: 'break-all' }}>
+            {GATEWAY_BASE}/health
+          </a>
         </div>
 
         {/* 步骤 1：申请证书 */}
@@ -168,7 +184,8 @@ export function CertSetupGuide({
           </div>
         )}
 
-        {checkFailed && (
+        {/* 检测结果提示 */}
+        {checkResult === 'no_cert' && (
           <div style={{
             marginBottom: 16,
             padding: '10px 14px',
@@ -186,57 +203,48 @@ export function CertSetupGuide({
           </div>
         )}
 
-        {certPassword && (
-          <button
-            onClick={handleConfirm}
-            disabled={checking}
-            style={{
-              width: '100%',
-              padding: '11px 16px',
-              borderRadius: 'var(--radius-md)',
-              border: 'none',
-              background: 'var(--accent)',
-              color: '#fff',
-              fontSize: 'var(--font-sm)',
-              fontWeight: 600,
-              cursor: checking ? 'wait' : 'pointer',
-              opacity: checking ? 0.7 : 1,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: 8,
-              transition: 'opacity 0.15s',
-            }}
-          >
-            {checking ? '正在验证证书...' : '我已导入，进入系统'}
-          </button>
+        {checkResult === 'unreachable' && (
+          <div style={{
+            marginBottom: 16,
+            padding: '10px 14px',
+            borderRadius: 'var(--radius-sm)',
+            background: 'var(--danger-bg, rgba(239,68,68,0.1))',
+            border: '1px solid var(--danger)',
+            color: 'var(--danger)',
+            fontSize: 'var(--font-xs)',
+            lineHeight: 1.5,
+          }}>
+            无法连接到网关 {GATEWAY_BASE}。<br />
+            请先点击上方「{GATEWAY_BASE}/health」链接，<br />
+            在打开的页面点「高级」-&gt;「继续前往」信任证书，<br />
+            然后回到本页重试。
+          </div>
         )}
 
-        {!certPassword && (
-          <button
-            onClick={handleConfirm}
-            disabled={checking}
-            style={{
-              width: '100%',
-              padding: '11px 16px',
-              borderRadius: 'var(--radius-md)',
-              border: 'none',
-              background: 'var(--accent)',
-              color: '#fff',
-              fontSize: 'var(--font-sm)',
-              fontWeight: 600,
-              cursor: checking ? 'wait' : 'pointer',
-              opacity: checking ? 0.7 : 1,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: 8,
-              transition: 'opacity 0.15s',
-            }}
-          >
-            {checking ? '正在验证证书...' : '已导入，进入系统'}
-          </button>
-        )}
+        {/* 进入系统按钮（始终显示） */}
+        <button
+          onClick={handleConfirm}
+          disabled={checking}
+          style={{
+            width: '100%',
+            padding: '11px 16px',
+            borderRadius: 'var(--radius-md)',
+            border: 'none',
+            background: 'var(--accent)',
+            color: '#fff',
+            fontSize: 'var(--font-sm)',
+            fontWeight: 600,
+            cursor: checking ? 'wait' : 'pointer',
+            opacity: checking ? 0.7 : 1,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 8,
+            transition: 'opacity 0.15s',
+          }}
+        >
+          {checking ? '正在验证证书...' : certPassword ? '我已导入，进入系统' : '已导入，进入系统'}
+        </button>
 
         <button
           onClick={onBack}

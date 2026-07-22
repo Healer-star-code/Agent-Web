@@ -111,13 +111,13 @@ export default function App() {
   useEffect(() => {
     if (!isLoggedIn || certStatus !== 'idle') return
     setCertStatus('checking')
-    checkCertReady().then((ready) => setCertStatus(ready ? 'ready' : 'not_ready'))
+    checkCertReady().then((result) => setCertStatus(result === 'ready' ? 'ready' : 'not_ready'))
   }, [isLoggedIn, certStatus])
 
-  const recheckCert = useCallback(async (): Promise<boolean> => {
-    const ready = await checkCertReady()
-    if (ready) setCertStatus('ready')
-    return ready
+  const recheckCert = useCallback(async (): Promise<string> => {
+    const result = await checkCertReady()
+    if (result === 'ready') setCertStatus('ready')
+    return result
   }, [])
 
   const requestCert = useCallback(async (): Promise<string> => {
@@ -139,8 +139,8 @@ export default function App() {
     setCertStatus('checking')
 
     // 探测浏览器是否已导入证书
-    const ready = await checkCertReady()
-    setCertStatus(ready ? 'ready' : 'not_ready')
+    const result = await checkCertReady()
+    setCertStatus(result === 'ready' ? 'ready' : 'not_ready')
   }, [])
 
   const handleLogout = useCallback(() => {
