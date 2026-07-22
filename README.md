@@ -1,85 +1,53 @@
-# 超级小金（桌面客户端 v4）
+# 超级小金 Web（Super King Agent Web）
 
-基于 React + TypeScript + Vite + Electron 构建的超级小金桌面客户端。
-
-> **本仓库是 v4 桌面客户端**。Web 版（v3-web）见 `E:\EducationalAgent\v3-web`。  
-> 完整设计、IPC 表、发版流程见 [`docs/DESKTOP.md`](./docs/DESKTOP.md)。
+基于 React + TypeScript + Vite + Tailwind CSS 构建的超级小金 AI 教学助手 Web 客户端。
 
 ## 功能特性
 
 - **智能对话**：与 AI 教学助手实时交互，支持 Markdown 渲染和代码高亮
 - **会话管理**：多会话切换，保留历史对话记录
-- **桌面集成**：状态栏托盘、原生目录选择、一键启停 super-king 后端
-- **本地/远程**双模式：客户端可启本地 super-king.exe，也可连远程服务器
-- **自动更新**：electron-updater 接入，发现新版本可一键下载+重启安装
+- **文件处理**：支持 Word、PDF、Excel、图片等文件上传与解析
+- **Skills 系统**：加载和管理本地技能扩展
+- **Docker 部署**：通过 nginx 容器部署，反向代理 super-king 后端
 
 ## 技术栈
 
-- React 19 + TypeScript + Vite 8
-- Electron 33 + electron-vite + electron-builder
-- electron-store（持久化设置）
-- electron-updater（自动更新）
-- tree-kill（彻底干掉 super-king 子进程）
+- React 19 + TypeScript 6 + Vite 8
+- Tailwind CSS 3 + PostCSS
+- Phosphor Icons + Framer Motion
+- react-markdown + react-syntax-highlighter（Markdown 渲染）
+- mammoth / pdf-parse / xlsx / jszip（文件解析）
 
 ## 快速开始
 
 ```bash
 npm install
-npm run dev
+npm run dev        # 启动开发服务器 http://localhost:5173
 ```
 
-Electron 桌面客户端会自动弹出窗口（Vite dev server 同时启）。
-
-如只想看浏览器版本：
+## 构建
 
 ```bash
-npm run dev:web   # 仅起 Vite，访问 http://localhost:5173
+npm run build      # tsc -b && vite build，产物在 dist/
+npm run preview    # 本地预览构建产物
+npm run typecheck  # 类型检查
+npm run lint       # ESLint
 ```
 
-## 打包
+## 部署
+
+构建后通过 Docker nginx 容器部署：
 
 ```bash
-# 完整 build（main + preload + renderer）
-npm run build
-
-# 打 Windows .exe（含 nsis installer + portable）
-npm run build:win
-# 产物在 release/
-
-# 打 Linux AppImage
-npm run build:linux
+docker run -d --name v6_web \
+  -p 80:80 \
+  -v /opt/v6_web/dist:/usr/share/nginx/html:ro \
+  -v /opt/v6_web/nginx.conf:/etc/nginx/conf.d/default.conf:ro \
+  nginx:alpine
 ```
 
-更详细的安装、配置、发版、自动更新流程见 [`docs/DESKTOP.md`](./docs/DESKTOP.md)。
+nginx 反向代理 `/superking-api/` 到 super-king 后端（端口 30142）。
 
-## 项目结构（v4 桌面版）
+## 后端
 
-```
-electron/
-├── main/
-│   ├── index.ts          # 主进程入口
-│   ├── superking.ts      # super-king 子进程管理
-│   ├── helper.ts         # 本地 skills 扫描（替代旧 30143 helper）
-│   ├── tray.ts           # 系统托盘
-│   ├── store.ts          # electron-store 持久化设置
-│   └── updater.ts        # electron-updater 状态机
-└── preload/
-    └── index.ts          # contextBridge → window.piDesktop
-
-src/                      # Renderer，沿用 v3-web
-├── App.tsx
-├── lib/
-│   ├── desktopBridge.ts  # window.piDesktop 类型 + isDesktop 检测
-│   └── piApi.ts          # 双模式：Electron 走 IPC，浏览器走 HTTP
-└── components/
-    ├── SuperKingBadge.tsx        # 顶栏后端状态药丸
-    ├── DesktopBackendSection.tsx # 设置面板「桌面后端」整块
-    ├── UpdaterCard.tsx           # 设置面板「软件更新」整块
-    ├── Sidebar.tsx
-    ├── ChatArea.tsx
-    └── ...
-```
-
-## 数据说明
-
-`mockData.ts` 内置一些演示数据，真实数据来自 super-king 后端（默认 `127.0.0.1:30142`）。
+真实数据来自 super-king 后端（默认 `127.0.0.1:30142`），开发环境通过 Vite proxy 转发 `/superking-api` 前缀请求。
