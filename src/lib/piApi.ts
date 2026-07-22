@@ -280,7 +280,16 @@ export async function getCertificate(token: string): Promise<CertificateResult> 
   })
   const json = await res.json() as { code: number; message?: string; data?: CertificateResult }
   if (json.code !== 200) throw new Error(json.message || '获取证书失败')
-  return json.data ?? {}
+  const data = json.data ?? {}
+  // MinIO presigned URL 用的是 127.0.0.1:9130（仅 118 本机可访问），
+  // 改写为 Nginx /oss/ 代理地址让浏览器能下载
+  if (data.downloadUrl) {
+    data.downloadUrl = data.downloadUrl.replace(
+      /https?:\/\/127\.0\.0\.1:9130/,
+      `${AUTH_API_BASE}/oss`
+    )
+  }
+  return data
 }
 
 export async function checkCertReady(): Promise<boolean> {
