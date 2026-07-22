@@ -222,6 +222,7 @@ export function ChatArea({ session, selectedCwd, newSessionCwd, chatInputRef, on
   const isUserNearBottomRef = useRef(true)
   const forceScrollRef = useRef(false)
   const normalizeSessionIdRef = useRef<string | null>(null)
+  const normalizeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // 记录已扫描过 artifact 的消息 id + content 长度，避免对同一条消息重复扫描
   const scannedForArtifactsRef = useRef<Map<string, number>>(new Map())
@@ -1109,7 +1110,11 @@ if (normalized.length > 0 && !sdkSessionInfoRef.current?.firstMessage && onSessi
           )))
         }
         if (sessionId) {
-          void normalizeMessagesForSession(sessionId)
+          if (normalizeTimerRef.current) clearTimeout(normalizeTimerRef.current)
+          normalizeTimerRef.current = setTimeout(() => {
+            normalizeTimerRef.current = null
+            void normalizeMessagesForSession(sessionId)
+          }, 300)
         }
         break
       }

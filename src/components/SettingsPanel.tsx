@@ -129,7 +129,6 @@ export function SettingsPanel({
   const [draftTheme, setDraftTheme] = useState(isDark)
   const [draftFontSize, setDraftFontSize] = useState(fontSize)
   const [draftMode, setDraftMode] = useState(mode)
-  const [draftCwd, setDraftCwd] = useState(selectedCwd ?? '')
   const [draftLanguage, setDraftLanguage] = useState(language)
 
   const [models, setModels] = useState<ModelProviderInfo[]>([])
@@ -153,7 +152,6 @@ export function SettingsPanel({
       setDraftTheme(isDark)
       setDraftFontSize(fontSize)
       setDraftMode(mode)
-      setDraftCwd(selectedCwd ?? '')
       setDraftLanguage(language)
     })
   }, [serverUrl, isDark, fontSize, mode, selectedCwd, language])
@@ -198,9 +196,9 @@ export function SettingsPanel({
     onThemeChange(draftTheme)
     onFontSizeChange(draftFontSize)
     onModeChange(draftMode)
-    onCwdChange(draftCwd.trim() || null)
+    onCwdChange('/workspace')
     onLanguageChange(draftLanguage)
-  }, [draftServerUrl, draftTheme, draftFontSize, draftMode, draftCwd, draftLanguage, applyServerSettings, onThemeChange, onFontSizeChange, onModeChange, onCwdChange, onLanguageChange])
+  }, [draftServerUrl, draftTheme, draftFontSize, draftMode, draftLanguage, applyServerSettings, onThemeChange, onFontSizeChange, onModeChange, onCwdChange, onLanguageChange])
 
   const handleLogout = useCallback(() => {
     onProfileChange({ name: '' })
@@ -280,21 +278,6 @@ export function SettingsPanel({
             {testStatus.message}
           </div>
         )}
-      </div>
-
-      <div style={{ marginBottom: 28 }}>
-        <div style={{ fontSize: 'var(--font-xs)', fontWeight: 600, color: 'var(--text-dim)', marginBottom: 10, textTransform: 'uppercase', letterSpacing: '0.05em' }}>默认工作空间路径</div>
-        <input
-          type="text"
-          value={draftCwd}
-          onChange={(e) => setDraftCwd(e.target.value)}
-          placeholder="/workspace"
-          className="input-field"
-          style={{ width: '100%' }}
-        />
-        <div style={{ marginTop: 8, fontSize: 'var(--font-xs)', color: 'var(--text-muted)', lineHeight: 1.5 }}>
-          新建任务、工作空间时将自动存放在该路径下。修改后不影响已有数据。
-        </div>
       </div>
 
       <div>
