@@ -94,7 +94,6 @@ export default function App() {
 
   const isLoggedIn = userProfile.name.trim().length > 0
   const [certStatus, setCertStatus] = useState<'idle' | 'checking' | 'ready' | 'not_ready'>('idle')
-  const [certPassword, setCertPassword] = useState('')
 
   // 登录后订阅 CA 系统实时通知（证书分发 / 实例绑定 / 吊销等），登出时断开。
   useEffect(() => {
@@ -121,22 +120,23 @@ export default function App() {
     return ready
   }, [])
 
+  const requestCert = useCallback(async (): Promise<string> => {
+    const token = getAuthUser()?.token
+    if (!token) throw new Error('未登录')
+    const cert = await getCertificate(token)
+    if (cert.downloadUrl) {
+      const a = document.createElement('a')
+      a.href = cert.downloadUrl
+      a.download = 'certificate.zip'
+      a.click()
+    }
+    return cert.password ?? ''
+  }, [])
+
   const handleLoginSuccess = useCallback(async (name: string, token: string) => {
     setAuthUser(name, token)
     setUserProfile({ name })
     setCertStatus('checking')
-
-    // 自动下载客户端证书 ZIP（首次登录触发签发）
-    try {
-      const cert = await getCertificate(token)
-      if (cert.password) setCertPassword(cert.password)
-      if (cert.downloadUrl) {
-        const a = document.createElement('a')
-        a.href = cert.downloadUrl
-        a.download = 'certificate.zip'
-        a.click()
-      }
-    } catch { /* 证书下载失败不阻塞流程 */ }
 
     // 探测浏览器是否已导入证书
     const ready = await checkCertReady()
@@ -356,7 +356,7 @@ export default function App() {
   if (certStatus === 'not_ready') {
     return (
       <ErrorBoundary>
-        <CertSetupGuide onRecheck={recheckCert} onBack={handleLogout} certPassword={certPassword} />
+        <CertSetupGuide onRecheck={recheckCert} onBack={handleLogout} onRequestCert={requestCert} />
       </ErrorBoundary>
     )
   }

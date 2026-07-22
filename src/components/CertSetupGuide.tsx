@@ -4,14 +4,30 @@ import { XiaojinLogo } from './XiaojinLogo'
 export function CertSetupGuide({
   onRecheck,
   onBack,
-  certPassword,
+  onRequestCert,
 }: {
   onRecheck: () => Promise<boolean>
   onBack: () => void
-  certPassword: string
+  onRequestCert: () => Promise<string>
 }) {
   const [checking, setChecking] = useState(false)
   const [checkFailed, setCheckFailed] = useState(false)
+  const [requesting, setRequesting] = useState(false)
+  const [certPassword, setCertPassword] = useState('')
+  const [requestError, setRequestError] = useState('')
+
+  async function handleRequestCert() {
+    setRequesting(true)
+    setRequestError('')
+    try {
+      const pwd = await onRequestCert()
+      setCertPassword(pwd)
+    } catch (err) {
+      setRequestError(err instanceof Error ? err.message : '申请证书失败')
+    } finally {
+      setRequesting(false)
+    }
+  }
 
   async function handleConfirm() {
     setChecking(true)
@@ -47,7 +63,7 @@ export function CertSetupGuide({
           boxShadow: 'var(--shadow-xl)',
         }}
       >
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: 28 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: 24 }}>
           <XiaojinLogo size={64} />
           <div style={{ fontSize: 'var(--font-lg)', fontWeight: 700, color: 'var(--text)', marginTop: 12 }}>
             超级小金
@@ -57,53 +73,98 @@ export function CertSetupGuide({
           </div>
         </div>
 
-        <div style={{ marginBottom: 20, fontSize: 'var(--font-sm)', color: 'var(--text-muted)', lineHeight: 1.8 }}>
-          <div style={{ marginBottom: 8, color: 'var(--success)', fontWeight: 600 }}>
-            ✓ 证书已下载到您的电脑
-          </div>
-          <div style={{ marginBottom: 12 }}>请按以下步骤导入（仅需操作一次）：</div>
-          <div style={{ paddingLeft: 8 }}>
-            <div>1. 打开下载的 certificate.zip</div>
-            <div>2. 双击 client.p12 文件</div>
-            <div>3. 输入下方密码</div>
-            <div>4. 选择「个人」存储 -&gt; 完成导入</div>
-            <div>5. 重启浏览器后点击下方按钮</div>
-          </div>
-        </div>
-
-        {certPassword && (
-          <div style={{
-            marginBottom: 16,
-            padding: '10px 14px',
-            borderRadius: 'var(--radius-md)',
-            background: 'var(--bg-hover)',
-            border: '1px solid var(--border)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: 8,
-          }}>
-            <div>
-              <div style={{ fontSize: 'var(--font-xs)', color: 'var(--text-dim)', marginBottom: 2 }}>P12 密码</div>
-              <div style={{ fontSize: 'var(--font-sm)', fontFamily: 'var(--font-mono)', color: 'var(--text)', fontWeight: 600, letterSpacing: '0.05em' }}>
-                {certPassword}
-              </div>
+        {/* 步骤 1：申请证书 */}
+        {!certPassword && (
+          <div style={{ marginBottom: 20 }}>
+            <div style={{ fontSize: 'var(--font-sm)', fontWeight: 600, color: 'var(--text)', marginBottom: 8 }}>
+              第一步：申请并下载证书
             </div>
-            <button
-              onClick={() => { navigator.clipboard.writeText(certPassword) }}
-              style={{
-                padding: '6px 12px',
+            <div style={{ fontSize: 'var(--font-xs)', color: 'var(--text-muted)', marginBottom: 12, lineHeight: 1.6 }}>
+              点击下方按钮申请客户端证书，浏览器会自动下载 certificate.zip 文件。
+            </div>
+            {requestError && (
+              <div style={{
+                marginBottom: 12,
+                padding: '8px 12px',
                 borderRadius: 'var(--radius-sm)',
-                border: '1px solid var(--border)',
-                background: 'var(--bg)',
-                color: 'var(--text-muted)',
+                background: 'var(--danger-bg, rgba(239,68,68,0.1))',
+                color: 'var(--danger)',
                 fontSize: 'var(--font-xs)',
-                cursor: 'pointer',
-                whiteSpace: 'nowrap',
+              }}>
+                {requestError}
+              </div>
+            )}
+            <button
+              onClick={handleRequestCert}
+              disabled={requesting}
+              style={{
+                width: '100%',
+                padding: '10px 16px',
+                borderRadius: 'var(--radius-md)',
+                border: '1px solid var(--accent)',
+                background: 'var(--accent-bg, transparent)',
+                color: 'var(--accent)',
+                fontSize: 'var(--font-sm)',
+                fontWeight: 600,
+                cursor: requesting ? 'wait' : 'pointer',
+                opacity: requesting ? 0.7 : 1,
               }}
             >
-              复制
+              {requesting ? '正在申请...' : '申请证书'}
             </button>
+          </div>
+        )}
+
+        {/* 步骤 2：导入证书 */}
+        {certPassword && (
+          <div style={{ marginBottom: 20 }}>
+            <div style={{ fontSize: 'var(--font-sm)', fontWeight: 600, color: 'var(--text)', marginBottom: 8 }}>
+              第二步：导入证书到浏览器
+            </div>
+            <div style={{ fontSize: 'var(--font-xs)', color: 'var(--text-muted)', marginBottom: 12, lineHeight: 1.8 }}>
+              <div style={{ marginBottom: 4, color: 'var(--success)', fontWeight: 600 }}>✓ 证书已下载</div>
+              请按以下步骤导入（仅需一次）：
+              <div style={{ paddingLeft: 8, marginTop: 4 }}>
+                <div>1. 打开下载的 certificate.zip</div>
+                <div>2. 双击 client.p12 文件</div>
+                <div>3. 输入下方密码</div>
+                <div>4. 选择「个人」存储 -&gt; 完成导入</div>
+                <div>5. 重启浏览器</div>
+              </div>
+            </div>
+
+            <div style={{
+              padding: '10px 14px',
+              borderRadius: 'var(--radius-md)',
+              background: 'var(--bg-hover)',
+              border: '1px solid var(--border)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 8,
+            }}>
+              <div>
+                <div style={{ fontSize: 'var(--font-xs)', color: 'var(--text-dim)', marginBottom: 2 }}>P12 密码</div>
+                <div style={{ fontSize: 'var(--font-sm)', fontFamily: 'var(--font-mono)', color: 'var(--text)', fontWeight: 600, letterSpacing: '0.05em' }}>
+                  {certPassword}
+                </div>
+              </div>
+              <button
+                onClick={() => { navigator.clipboard.writeText(certPassword) }}
+                style={{
+                  padding: '6px 12px',
+                  borderRadius: 'var(--radius-sm)',
+                  border: '1px solid var(--border)',
+                  background: 'var(--bg)',
+                  color: 'var(--text-muted)',
+                  fontSize: 'var(--font-xs)',
+                  cursor: 'pointer',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                复制
+              </button>
+            </div>
           </div>
         )}
 
@@ -125,29 +186,31 @@ export function CertSetupGuide({
           </div>
         )}
 
-        <button
-          onClick={handleConfirm}
-          disabled={checking}
-          style={{
-            width: '100%',
-            padding: '11px 16px',
-            borderRadius: 'var(--radius-md)',
-            border: 'none',
-            background: 'var(--accent)',
-            color: '#fff',
-            fontSize: 'var(--font-sm)',
-            fontWeight: 600,
-            cursor: checking ? 'wait' : 'pointer',
-            opacity: checking ? 0.7 : 1,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: 8,
-            transition: 'opacity 0.15s',
-          }}
-        >
-          {checking ? '正在验证证书...' : '我已导入，进入系统'}
-        </button>
+        {certPassword && (
+          <button
+            onClick={handleConfirm}
+            disabled={checking}
+            style={{
+              width: '100%',
+              padding: '11px 16px',
+              borderRadius: 'var(--radius-md)',
+              border: 'none',
+              background: 'var(--accent)',
+              color: '#fff',
+              fontSize: 'var(--font-sm)',
+              fontWeight: 600,
+              cursor: checking ? 'wait' : 'pointer',
+              opacity: checking ? 0.7 : 1,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 8,
+              transition: 'opacity 0.15s',
+            }}
+          >
+            {checking ? '正在验证证书...' : '我已导入，进入系统'}
+          </button>
+        )}
 
         <button
           onClick={onBack}
