@@ -76,19 +76,6 @@ export function CertSetupGuide({
           </div>
         </div>
 
-        {/* 步骤 0：信任网关证书（必须先做） */}
-        <div style={{ marginBottom: 20, padding: '12px 14px', borderRadius: 'var(--radius-md)', background: 'var(--bg-hover)', border: '1px solid var(--border)' }}>
-          <div style={{ fontSize: 'var(--font-sm)', fontWeight: 600, color: 'var(--text)', marginBottom: 6 }}>
-            前置步骤：信任网关证书
-          </div>
-          <div style={{ fontSize: 'var(--font-xs)', color: 'var(--text-muted)', marginBottom: 8, lineHeight: 1.6 }}>
-            首次使用需先在浏览器中信任网关的 HTTPS 证书。点击下方链接，在打开的页面点「高级」-&gt;「继续前往」。
-          </div>
-          <a href={`${GATEWAY_BASE}/health`} target="_blank" rel="noopener noreferrer" style={{ fontSize: 'var(--font-xs)', color: 'var(--accent)', wordBreak: 'break-all' }}>
-            {GATEWAY_BASE}/health
-          </a>
-        </div>
-
         {/* 步骤 1：申请证书 */}
         {!certPassword && (
           <div style={{ marginBottom: 20 }}>
@@ -214,10 +201,11 @@ export function CertSetupGuide({
             fontSize: 'var(--font-xs)',
             lineHeight: 1.5,
           }}>
-            无法连接到网关 {GATEWAY_BASE}。<br />
-            请先点击上方「{GATEWAY_BASE}/health」链接，<br />
-            在打开的页面点「高级」-&gt;「继续前往」信任证书，<br />
-            然后回到本页重试。
+            无法连接到网关，需要先信任 HTTPS 证书。<br />
+            <a href={`${GATEWAY_BASE}/health`} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent)', wordBreak: 'break-all' }}>
+              点击这里打开 {GATEWAY_BASE}/health
+            </a><br />
+            在打开的页面点「高级」-&gt;「继续前往」，然后回来重试。
           </div>
         )}
 
