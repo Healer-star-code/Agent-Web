@@ -94,6 +94,7 @@ export default function App() {
 
   const isLoggedIn = userProfile.name.trim().length > 0
   const [certStatus, setCertStatus] = useState<'idle' | 'checking' | 'ready' | 'not_ready'>('idle')
+  const [certPassword, setCertPassword] = useState('')
 
   // 登录后订阅 CA 系统实时通知（证书分发 / 实例绑定 / 吊销等），登出时断开。
   useEffect(() => {
@@ -114,9 +115,10 @@ export default function App() {
     checkCertReady().then((ready) => setCertStatus(ready ? 'ready' : 'not_ready'))
   }, [isLoggedIn, certStatus])
 
-  const recheckCert = useCallback(() => {
-    setCertStatus('checking')
-    checkCertReady().then((ready) => setCertStatus(ready ? 'ready' : 'not_ready'))
+  const recheckCert = useCallback(async (): Promise<boolean> => {
+    const ready = await checkCertReady()
+    if (ready) setCertStatus('ready')
+    return ready
   }, [])
 
   const handleLoginSuccess = useCallback(async (name: string, token: string) => {
@@ -127,6 +129,7 @@ export default function App() {
     // 自动下载客户端证书 ZIP（首次登录触发签发）
     try {
       const cert = await getCertificate(token)
+      if (cert.password) setCertPassword(cert.password)
       if (cert.downloadUrl) {
         const a = document.createElement('a')
         a.href = cert.downloadUrl
@@ -353,7 +356,7 @@ export default function App() {
   if (certStatus === 'not_ready') {
     return (
       <ErrorBoundary>
-        <CertSetupGuide onRecheck={recheckCert} />
+        <CertSetupGuide onRecheck={recheckCert} onBack={handleLogout} certPassword={certPassword} />
       </ErrorBoundary>
     )
   }

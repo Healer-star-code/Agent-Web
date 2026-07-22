@@ -1,14 +1,26 @@
 import { useState } from 'react'
 import { XiaojinLogo } from './XiaojinLogo'
 
-export function CertSetupGuide({ onRecheck }: { onRecheck: () => void }) {
+export function CertSetupGuide({
+  onRecheck,
+  onBack,
+  certPassword,
+}: {
+  onRecheck: () => Promise<boolean>
+  onBack: () => void
+  certPassword: string
+}) {
   const [checking, setChecking] = useState(false)
-  const [error, setError] = useState('')
+  const [checkFailed, setCheckFailed] = useState(false)
 
   async function handleConfirm() {
-    setError('')
     setChecking(true)
-    onRecheck()
+    setCheckFailed(false)
+    const ready = await onRecheck()
+    setChecking(false)
+    if (!ready) {
+      setCheckFailed(true)
+    }
   }
 
   return (
@@ -53,22 +65,63 @@ export function CertSetupGuide({ onRecheck }: { onRecheck: () => void }) {
           <div style={{ paddingLeft: 8 }}>
             <div>1. 打开下载的 certificate.zip</div>
             <div>2. 双击 client.p12 文件</div>
-            <div>3. 输入密码（打开 password.txt 查看）</div>
-            <div>4. 选择「个人」存储 → 完成导入</div>
+            <div>3. 输入下方密码</div>
+            <div>4. 选择「个人」存储 -&gt; 完成导入</div>
+            <div>5. 重启浏览器后点击下方按钮</div>
           </div>
         </div>
 
-        {error && (
+        {certPassword && (
           <div style={{
             marginBottom: 16,
-            padding: '8px 12px',
+            padding: '10px 14px',
+            borderRadius: 'var(--radius-md)',
+            background: 'var(--bg-hover)',
+            border: '1px solid var(--border)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 8,
+          }}>
+            <div>
+              <div style={{ fontSize: 'var(--font-xs)', color: 'var(--text-dim)', marginBottom: 2 }}>P12 密码</div>
+              <div style={{ fontSize: 'var(--font-sm)', fontFamily: 'var(--font-mono)', color: 'var(--text)', fontWeight: 600, letterSpacing: '0.05em' }}>
+                {certPassword}
+              </div>
+            </div>
+            <button
+              onClick={() => { navigator.clipboard.writeText(certPassword) }}
+              style={{
+                padding: '6px 12px',
+                borderRadius: 'var(--radius-sm)',
+                border: '1px solid var(--border)',
+                background: 'var(--bg)',
+                color: 'var(--text-muted)',
+                fontSize: 'var(--font-xs)',
+                cursor: 'pointer',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              复制
+            </button>
+          </div>
+        )}
+
+        {checkFailed && (
+          <div style={{
+            marginBottom: 16,
+            padding: '10px 14px',
             borderRadius: 'var(--radius-sm)',
             background: 'var(--danger-bg, rgba(239,68,68,0.1))',
+            border: '1px solid var(--danger)',
             color: 'var(--danger)',
             fontSize: 'var(--font-xs)',
             lineHeight: 1.5,
           }}>
-            {error}
+            未检测到客户端证书。请确认：<br />
+            · 已双击 client.p12 并输入密码完成导入<br />
+            · 导入时选择了「个人」存储<br />
+            · 已重启浏览器（关闭所有窗口后重新打开）
           </div>
         )}
 
@@ -96,16 +149,22 @@ export function CertSetupGuide({ onRecheck }: { onRecheck: () => void }) {
           {checking ? '正在验证证书...' : '我已导入，进入系统'}
         </button>
 
-        <div style={{
-          marginTop: 16,
-          fontSize: 'var(--font-xs)',
-          color: 'var(--text-dim)',
-          lineHeight: 1.5,
-        }}>
-          ⚠ 提示「未检测到证书」？请确认：<br />
-          · 导入时选择了「个人」而非「受信任的根证书」<br />
-          · 导入完成后重启了浏览器
-        </div>
+        <button
+          onClick={onBack}
+          style={{
+            width: '100%',
+            padding: '10px 16px',
+            marginTop: 8,
+            borderRadius: 'var(--radius-md)',
+            border: '1px solid var(--border)',
+            background: 'transparent',
+            color: 'var(--text-muted)',
+            fontSize: 'var(--font-sm)',
+            cursor: 'pointer',
+          }}
+        >
+          返回登录
+        </button>
       </div>
     </div>
   )

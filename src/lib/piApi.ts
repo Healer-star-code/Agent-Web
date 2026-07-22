@@ -272,6 +272,7 @@ export interface CertificateResult {
   existing?: string
   cert_serial?: string
   expiresIn?: number
+  password?: string
 }
 
 export async function getCertificate(token: string): Promise<CertificateResult> {
