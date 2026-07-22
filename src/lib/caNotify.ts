@@ -1,7 +1,6 @@
 import SockJS from 'sockjs-client'
 import { over } from 'stompjs'
 import type { Client } from 'stompjs'
-import { AUTH_API_BASE } from './piApi'
 
 export interface CaNotification {
   type: 'BIND' | 'UNBIND' | 'DISTRIBUTE' | 'REVOKE' | 'ERROR' | string
@@ -23,7 +22,7 @@ export function connectCaNotifications(
 
   function connect() {
     if (disposed) return
-    const socket = new SockJS(`${AUTH_API_BASE}/ws?token=${encodeURIComponent(token)}`)
+    const socket = new SockJS(`/ws?token=${encodeURIComponent(token)}`)
     client = over(socket)
     client.debug = () => {}
     client.connect(

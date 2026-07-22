@@ -237,7 +237,7 @@ export async function login(username: string, password: string): Promise<AuthRes
   const body = JSON.stringify({ username: trimmed, password })
   let data: LoginApiResponse
   try {
-    const res = await fetch(`${AUTH_API_BASE}/api/auth/login`, {
+    const res = await fetch('/api/auth/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body,
@@ -276,7 +276,7 @@ export interface CertificateResult {
 }
 
 export async function getCertificate(token: string): Promise<CertificateResult> {
-  const res = await fetch(`${AUTH_API_BASE}/api/my/certificate`, {
+  const res = await fetch('/api/my/certificate', {
     headers: { Authorization: `Bearer ${token}` },
   })
   const json = await res.json() as { code: number; message?: string; data?: CertificateResult }
@@ -287,7 +287,7 @@ export async function getCertificate(token: string): Promise<CertificateResult> 
   if (data.downloadUrl) {
     data.downloadUrl = data.downloadUrl.replace(
       /https?:\/\/127\.0\.0\.1:9130/,
-      `${AUTH_API_BASE}/oss`
+      '/oss'
     )
   }
   return data
