@@ -23,6 +23,8 @@
     "react-markdown": "^10.1.0",
     "react-syntax-highlighter": "^16.1.1",
     "remark-gfm": "^4.0.1",
+    "sockjs-client": "^1.6.1",
+    "stompjs": "^2.3.3",
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
@@ -30,6 +32,8 @@
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "@types/react-syntax-highlighter": "^15.5.13",
+    "@types/sockjs-client": "^1.5.4",
+    "@types/stompjs": "^2.3.10",
     "@vitejs/plugin-react": "^6.0.1",
     "autoprefixer": "^10.5.2",
     "eslint": "^10.3.0",

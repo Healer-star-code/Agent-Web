@@ -11,6 +11,7 @@ import {
   listSessions, deleteSession, renameSession, getStoredServerUrl, setStoredServerUrl,
   getAuthUser, setAuthUser, clearAuthUser, getMessages,
 } from './lib/piApi'
+import { connectCaNotifications } from './lib/caNotify'
 import { upsertSession, summarizeTitle } from './lib/sessionState'
 
 function pickDefaultServerUrl(): string {
@@ -85,6 +86,18 @@ export default function App() {
   }, [toast])
 
   const isLoggedIn = userProfile.name.trim().length > 0
+
+  // 登录后订阅 CA 系统实时通知（证书分发 / 实例绑定 / 吊销等），登出时断开。
+  useEffect(() => {
+    if (!isLoggedIn) return
+    const token = getAuthUser()?.token
+    if (!token) return
+    const disconnect = connectCaNotifications(token, (n) => {
+      const isError = n.type === 'ERROR' || n.type === 'REVOKE' || n.type === 'UNBIND'
+      setToast({ message: n.message, type: isError ? 'error' : 'success' })
+    })
+    return disconnect
+  }, [isLoggedIn])
 
   const handleLoginSuccess = useCallback((name: string, token: string) => {
     setAuthUser(name, token)
