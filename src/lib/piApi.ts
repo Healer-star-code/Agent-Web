@@ -261,6 +261,38 @@ export async function login(username: string, password: string): Promise<AuthRes
 }
 
 // ---------------------------------------------------------------------------
+// Certificate (mTLS client cert download + readiness probe)
+// ---------------------------------------------------------------------------
+
+const GATEWAY_BASE = DEFAULT_API_BASE.replace(/\/app$/, '')
+
+export interface CertificateResult {
+  downloadUrl?: string
+  distributed?: boolean
+  existing?: string
+  cert_serial?: string
+  expiresIn?: number
+}
+
+export async function getCertificate(token: string): Promise<CertificateResult> {
+  const res = await fetch(`${AUTH_API_BASE}/api/my/certificate`, {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  const json = await res.json() as { code: number; message?: string; data?: CertificateResult }
+  if (json.code !== 200) throw new Error(json.message || '获取证书失败')
+  return json.data ?? {}
+}
+
+export async function checkCertReady(): Promise<boolean> {
+  try {
+    const res = await fetch(`${GATEWAY_BASE}/health`, { method: 'GET' })
+    return res.ok
+  } catch {
+    return false
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Directory selection (no longer supported by v0.80 backend; returns null)
 // ---------------------------------------------------------------------------
 
