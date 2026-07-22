@@ -617,6 +617,11 @@ if (normalized.length > 0 && !sdkSessionInfoRef.current?.firstMessage && onSessi
             return msg
           })
         }
+        // 防缩减守卫：后端异步写入未完成时可能返回更少消息，不能覆盖 UI 已有的完整列表
+        if (normalized.length < currentMessages.length) {
+          console.warn(`[normalize] 后端返回 ${normalized.length} 条 < 当前 ${currentMessages.length} 条，跳过覆盖`)
+          return currentMessages
+        }
         return normalized
       })
       forceScrollRef.current = true
