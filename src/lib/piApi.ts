@@ -793,68 +793,79 @@ export function connectSessionEvents(sessionId: string, onEvent: (event: WebAgen
     }
   }
 
-  async function connect(isRetry: boolean): Promise<void> {
-    const token = getAuthUser()?.token
-    const headers: Record<string, string> = { Accept: 'text/event-stream' }
-    if (token) headers.Authorization = `Bearer ${token}`
-    let res: Response
-    try {
-      res = await fetch(`${base}/sessions/${encodeURIComponent(sessionId)}/events`, {
-        headers,
-        signal: controller.signal,
-      })
-    } catch {
-      if (!closed) onEvent({ type: 'error', message: '与服务器的事件连接已断开' })
-      return
-    }
-    if (res.status === 401 && !isRetry) {
-      const newToken = await refreshAccessToken()
-      if (newToken) return connect(true)
-      clearAuthUser()
-      notifyAuthExpired()
-      onEvent({ type: 'error', message: '登录已过期，请重新登录' })
-      return
-    }
-    if (!res.ok || !res.body) {
-      if (!closed) onEvent({ type: 'error', message: '与服务器的事件连接已断开' })
-      return
-    }
+  const RECONNECT_DELAY_MS = 3000
 
-    onEvent({ type: 'connected', sessionId })
-
-    const reader = res.body.getReader()
-    const decoder = new TextDecoder()
-    let buffer = ''
-    try {
-      for (;;) {
-        const { done, value } = await reader.read()
-        if (done) break
-        buffer += decoder.decode(value, { stream: true })
-        let sepIdx: number
-        while ((sepIdx = buffer.indexOf('\n\n')) !== -1) {
-          const rawEvent = buffer.slice(0, sepIdx)
-          buffer = buffer.slice(sepIdx + 2)
-          const dataLines: string[] = []
-          for (const line of rawEvent.split('\n')) {
-            if (line.startsWith('data:')) dataLines.push(line.slice(5).replace(/^ /, ''))
-          }
-          if (dataLines.length === 0) continue
-          let parsed: any
-          try {
-            parsed = JSON.parse(dataLines.join('\n'))
-          } catch {
-            continue
-          }
-          handleEventData(parsed)
-        }
+  async function connect(): Promise<void> {
+    for (;;) {
+      if (closed) return
+      const token = getAuthUser()?.token
+      const headers: Record<string, string> = { Accept: 'text/event-stream' }
+      if (token) headers.Authorization = `Bearer ${token}`
+      let res: Response
+      try {
+        res = await fetch(`${base}/sessions/${encodeURIComponent(sessionId)}/events`, {
+          headers,
+          signal: controller.signal,
+        })
+      } catch {
+        if (closed) return
+        await new Promise((r) => setTimeout(r, RECONNECT_DELAY_MS))
+        continue
       }
-    } catch {
-      // 主动 close() 或网络中断都会走到这里
+      if (res.status === 401) {
+        const newToken = await refreshAccessToken()
+        if (newToken) continue
+        clearAuthUser()
+        notifyAuthExpired()
+        onEvent({ type: 'error', message: '登录已过期，请重新登录' })
+        return
+      }
+      if (!res.ok || !res.body) {
+        if (closed) return
+        await new Promise((r) => setTimeout(r, RECONNECT_DELAY_MS))
+        continue
+      }
+
+      onEvent({ type: 'connected', sessionId })
+
+      const reader = res.body.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ''
+      try {
+        for (;;) {
+          const { done, value } = await reader.read()
+          if (done) break
+          buffer += decoder.decode(value, { stream: true })
+          let sepIdx: number
+          while ((sepIdx = buffer.indexOf('\n\n')) !== -1) {
+            const rawEvent = buffer.slice(0, sepIdx)
+            buffer = buffer.slice(sepIdx + 2)
+            const dataLines: string[] = []
+            for (const line of rawEvent.split('\n')) {
+              if (line.startsWith('data:')) dataLines.push(line.slice(5).replace(/^ /, ''))
+            }
+            if (dataLines.length === 0) continue
+            let parsed: any
+            try {
+              parsed = JSON.parse(dataLines.join('\n'))
+            } catch {
+              continue
+            }
+            handleEventData(parsed)
+          }
+        }
+      } catch {
+        // 主动 close() 或网络中断都会走到这里
+      }
+      if (closed) return
+      // 流意外结束（nginx 超时、网络抖动等）：重置状态后静默重连
+      state.inTurn = false
+      reset()
+      await new Promise((r) => setTimeout(r, RECONNECT_DELAY_MS))
     }
-    if (!closed) onEvent({ type: 'error', message: '与服务器的事件连接已断开' })
   }
 
-  void connect(false)
+  void connect()
 
   return {
     close() {
