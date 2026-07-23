@@ -85,7 +85,7 @@ export type WebAgentEvent =
   | { type: 'agent_end' }
   | { type: 'error'; message: string }
 
-export const DEFAULT_API_BASE = 'https://192.168.157.118:8443/app'
+export const DEFAULT_API_BASE = 'http://192.168.157.118/app'
 const LS_SERVER_URL = 'pi-server-url-v080'
 const OLD_LS_SERVER_URL = 'pi-server-url'
 
@@ -102,8 +102,8 @@ export function getApiBase(): string {
     }
     const fromLs = localStorage.getItem(LS_SERVER_URL)
     if (fromLs && isValidApiBase(fromLs)) {
-      // 迁移旧的共享后端地址到 mTLS 网关
-      if (fromLs === 'http://127.0.0.1:3000' || fromLs === 'http://localhost:3000' || fromLs === 'http://192.168.157.117:3000') {
+      // 迁移旧的 mTLS 网关地址到 JWT 代理
+      if (fromLs.includes(':8443') || fromLs === 'http://127.0.0.1:3000' || fromLs === 'http://localhost:3000' || fromLs === 'http://192.168.157.117:3000') {
         localStorage.setItem(LS_SERVER_URL, DEFAULT_API_BASE)
         return DEFAULT_API_BASE
       }
@@ -261,48 +261,15 @@ export async function login(username: string, password: string): Promise<AuthRes
 }
 
 // ---------------------------------------------------------------------------
-// Certificate (mTLS client cert download + readiness probe)
+// Certificate - mTLS removed, JWT-only
 // ---------------------------------------------------------------------------
 
 export const GATEWAY_BASE = DEFAULT_API_BASE.replace(/\/app$/, '')
 
-export interface CertificateResult {
-  downloadUrl?: string
-  distributed?: boolean
-  existing?: string
-  cert_serial?: string
-  expiresIn?: number
-  password?: string
-}
-
-export async function getCertificate(token: string): Promise<CertificateResult> {
-  const res = await fetch('/api/my/certificate', {
-    headers: { Authorization: `Bearer ${token}` },
-  })
-  const json = await res.json() as { code: number; message?: string; data?: CertificateResult }
-  if (json.code !== 200) throw new Error(json.message || '获取证书失败')
-  const data = json.data ?? {}
-  // MinIO presigned URL 用的是 127.0.0.1:9130（仅 118 本机可访问），
-  // 改写为 Nginx /oss/ 代理地址让浏览器能下载
-  if (data.downloadUrl) {
-    data.downloadUrl = data.downloadUrl.replace(
-      /https?:\/\/127\.0\.0\.1:9130/,
-      '/oss'
-    )
-  }
-  return data
-}
-
-export type CertCheckResult = 'ready' | 'no_cert' | 'unreachable'
+export type CertCheckResult = 'ready'
 
 export async function checkCertReady(): Promise<CertCheckResult> {
-  try {
-    const res = await fetch(`${DEFAULT_API_BASE}/health`, { method: 'GET' })
-    if (res.ok) return 'ready'
-    return 'no_cert'
-  } catch {
-    return 'unreachable'
-  }
+  return 'ready'
 }
 
 // ---------------------------------------------------------------------------

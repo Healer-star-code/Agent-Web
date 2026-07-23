@@ -9,14 +9,13 @@ import { WelcomeScreen } from './components/WelcomeScreen'
 import type { ChatInputHandle } from './components/ChatInput'
 import {
   listSessions, deleteSession, renameSession, getStoredServerUrl, setStoredServerUrl,
-  getAuthUser, setAuthUser, clearAuthUser, getMessages, getCertificate, checkCertReady,
+  getAuthUser, setAuthUser, clearAuthUser, getMessages,
 } from './lib/piApi'
 import { connectCaNotifications } from './lib/caNotify'
-import { CertSetupGuide } from './components/CertSetupGuide'
 import { upsertSession, summarizeTitle } from './lib/sessionState'
 
 function pickDefaultServerUrl(): string {
-  return 'https://192.168.157.118:8443/app'
+  return 'http://192.168.157.118/app'
 }
 
 const APP_INSTITUTION = (import.meta.env.VITE_APP_INSTITUTION as string | undefined) ?? `v${__APP_VERSION__}`
@@ -93,9 +92,8 @@ export default function App() {
   }, [toast])
 
   const isLoggedIn = userProfile.name.trim().length > 0
-  const [certStatus, setCertStatus] = useState<'idle' | 'checking' | 'ready' | 'not_ready'>('idle')
 
-  // 登录后订阅 CA 系统实时通知（证书分发 / 实例绑定 / 吊销等），登出时断开。
+  // 登录后订阅 CA 系统实时通知（实例绑定 / 吊销等），登出时断开。
   useEffect(() => {
     if (!isLoggedIn) return
     const token = getAuthUser()?.token
@@ -107,46 +105,14 @@ export default function App() {
     return disconnect
   }, [isLoggedIn])
 
-  // 返回用户（已登录）探测证书是否已导入
-  useEffect(() => {
-    if (!isLoggedIn || certStatus !== 'idle') return
-    setCertStatus('checking')
-    checkCertReady().then((result) => setCertStatus(result === 'ready' ? 'ready' : 'not_ready'))
-  }, [isLoggedIn, certStatus])
-
-  const recheckCert = useCallback(async (): Promise<string> => {
-    const result = await checkCertReady()
-    if (result === 'ready') setCertStatus('ready')
-    return result
-  }, [])
-
-  const requestCert = useCallback(async (): Promise<string> => {
-    const token = getAuthUser()?.token
-    if (!token) throw new Error('未登录')
-    const cert = await getCertificate(token)
-    if (cert.downloadUrl) {
-      const a = document.createElement('a')
-      a.href = cert.downloadUrl
-      a.download = 'certificate.zip'
-      a.click()
-    }
-    return cert.password ?? ''
-  }, [])
-
-  const handleLoginSuccess = useCallback(async (name: string, token: string) => {
-    setAuthUser(name, token)
+  const handleLoginSuccess = useCallback((name: string, _token: string) => {
+    setAuthUser(name, _token)
     setUserProfile({ name })
-    setCertStatus('checking')
-
-    // 探测浏览器是否已导入证书
-    const result = await checkCertReady()
-    setCertStatus(result === 'ready' ? 'ready' : 'not_ready')
   }, [])
 
   const handleLogout = useCallback(() => {
     clearAuthUser()
     setUserProfile({ name: '' })
-    setCertStatus('idle')
     setSettingsOpen(false)
   }, [])
 
@@ -347,24 +313,6 @@ export default function App() {
     return (
       <ErrorBoundary>
         <LoginDialog onSuccess={handleLoginSuccess} />
-      </ErrorBoundary>
-    )
-  }
-
-  if (certStatus === 'checking') {
-    return (
-      <ErrorBoundary>
-        <div style={{ position: 'fixed', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg)' }}>
-          <div style={{ fontSize: 'var(--font-base)', color: 'var(--text-muted)' }}>正在检查证书...</div>
-        </div>
-      </ErrorBoundary>
-    )
-  }
-
-  if (certStatus === 'not_ready') {
-    return (
-      <ErrorBoundary>
-        <CertSetupGuide onRecheck={recheckCert} onBack={handleLogout} onRequestCert={requestCert} />
       </ErrorBoundary>
     )
   }
