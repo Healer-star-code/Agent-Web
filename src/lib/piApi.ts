@@ -85,11 +85,12 @@ export type WebAgentEvent =
   | { type: 'agent_end' }
   | { type: 'error'; message: string }
 
-export const DEFAULT_API_BASE = 'http://192.168.157.118/app'
+export const DEFAULT_API_BASE = '/app'
 const LS_SERVER_URL = 'pi-server-url-v080'
 const OLD_LS_SERVER_URL = 'pi-server-url'
 
 function isValidApiBase(url: string): boolean {
+  if (url === '/app') return true
   return /^https?:\/\//.test(url) && !url.includes('/superking-api') && !url.includes(':30142')
 }
 
@@ -102,10 +103,10 @@ export function getApiBase(): string {
     }
     const fromLs = localStorage.getItem(LS_SERVER_URL)
     if (fromLs && isValidApiBase(fromLs)) {
-      // 迁移旧的 mTLS 网关地址到 JWT 代理
-      if (fromLs.includes(':8443') || fromLs === 'http://127.0.0.1:3000' || fromLs === 'http://localhost:3000' || fromLs === 'http://192.168.157.117:3000') {
-        localStorage.setItem(LS_SERVER_URL, DEFAULT_API_BASE)
-        return DEFAULT_API_BASE
+      // 迁移所有旧的绝对地址到相对路径 /app（同源代理）
+      if (fromLs !== '/app') {
+        localStorage.setItem(LS_SERVER_URL, '/app')
+        return '/app'
       }
       return fromLs
     }
