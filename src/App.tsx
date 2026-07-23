@@ -9,7 +9,7 @@ import { WelcomeScreen } from './components/WelcomeScreen'
 import type { ChatInputHandle } from './components/ChatInput'
 import {
   listSessions, deleteSession, renameSession, getStoredServerUrl, setStoredServerUrl,
-  getAuthUser, setAuthUser, clearAuthUser, getMessages,
+  getAuthUser, setAuthUser, logout, getMessages,
 } from './lib/piApi'
 import { connectCaNotifications } from './lib/caNotify'
 import { upsertSession, summarizeTitle } from './lib/sessionState'
@@ -111,9 +111,16 @@ export default function App() {
   }, [])
 
   const handleLogout = useCallback(() => {
-    clearAuthUser()
+    void logout()
     setUserProfile({ name: '' })
     setSettingsOpen(false)
+  }, [])
+
+  // access_token 刷新失败（refresh_token 也失效）时，piApi 广播此事件，强制回到登录页
+  useEffect(() => {
+    const onExpired = () => setUserProfile({ name: '' })
+    window.addEventListener('pi-auth-expired', onExpired)
+    return () => window.removeEventListener('pi-auth-expired', onExpired)
   }, [])
 
   useEffect(() => {

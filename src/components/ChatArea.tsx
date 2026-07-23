@@ -9,7 +9,7 @@ type ChatSessionState = {
   error: string | null
   sdkSessionId: string | null
   sdkSessionInfo: SessionInfo | null
-  eventSource: EventSource | null
+  eventSource: SessionEventsConnection | null
   eventReadySessionId: string | null
   eventReadyResolve: (() => void) | null
   eventReadyTimeout: ReturnType<typeof setTimeout> | null
@@ -43,6 +43,7 @@ import {
   getMessages,
   sendPrompt,
   abortSession,
+  type SessionEventsConnection,
   type WebAgentEvent,
   type ApiImagePayload,
 } from '../lib/piApi'
@@ -194,13 +195,13 @@ export function ChatArea({ session, selectedCwd, newSessionCwd, chatInputRef, on
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const sdkSessionIdRef = useRef<string | null>(null)
   const sdkSessionInfoRef = useRef<SessionInfo | null>(null)
-  const eventSourceRef = useRef<EventSource | null>(null)
+  const eventSourceRef = useRef<SessionEventsConnection | null>(null)
   const eventReadySessionIdRef = useRef<string | null>(null)
   const eventReadyResolveRef = useRef<(() => void) | null>(null)
   // 当前 UI 正在显示的会话 id；SSE 事件按来源会话过滤，保证切会话时后台任务不污染当前显示
   const activeSessionIdRef = useRef<string | null>(null)
-  const eventSourceSessionMapRef = useRef<Map<EventSource, string>>(new Map())
-  const staleEventSourcesRef = useRef<Array<{ es: EventSource; sessionId: string; closeTimer: ReturnType<typeof setTimeout> }>>([])
+  const eventSourceSessionMapRef = useRef<Map<SessionEventsConnection, string>>(new Map())
+  const staleSessionEventsConnectionsRef = useRef<Array<{ es: SessionEventsConnection; sessionId: string; closeTimer: ReturnType<typeof setTimeout> }>>([])
   const currentAssistantIdRef = useRef<string | null>(null)
   const currentThinkingRef = useRef<string>('')
   const currentThinkingStartRef = useRef<number>(0)
@@ -520,17 +521,17 @@ if (normalized.length > 0 && !sdkSessionInfoRef.current?.firstMessage && onSessi
     }
   }
 
-  function closeAllEventSources() {
+  function closeAllSessionEventsConnections() {
     for (const [es] of eventSourceSessionMapRef.current) {
       es.close()
     }
     eventSourceSessionMapRef.current.clear()
     eventSourceRef.current = null
-    for (const entry of staleEventSourcesRef.current) {
+    for (const entry of staleSessionEventsConnectionsRef.current) {
       clearTimeout(entry.closeTimer)
       entry.es.close()
     }
-    staleEventSourcesRef.current = []
+    staleSessionEventsConnectionsRef.current = []
     for (const state of sessionStatesRef.current.values()) {
       if (state.eventReadyTimeout) {
         clearTimeout(state.eventReadyTimeout)
@@ -545,7 +546,7 @@ if (normalized.length > 0 && !sdkSessionInfoRef.current?.firstMessage && onSessi
   useEffect(() => {
     return () => {
       // 组件卸载：关闭所有会话的 SSE，清理所有节流定时器
-      closeAllEventSources()
+      closeAllSessionEventsConnections()
       if (textDeltaTimerRef.current) {
         clearTimeout(textDeltaTimerRef.current)
         textDeltaTimerRef.current = null
@@ -833,7 +834,7 @@ if (normalized.length > 0 && !sdkSessionInfoRef.current?.firstMessage && onSessi
     }
   }
 
-  const handleAgentEvent = useCallback((event: WebAgentEvent & { target?: EventSource }) => {
+  const handleAgentEvent = useCallback((event: WebAgentEvent & { target?: SessionEventsConnection }) => {
     const sourceSessionId = event.target
       ? eventSourceSessionMapRef.current.get(event.target)
       : activeSessionIdRef.current
@@ -1127,7 +1128,7 @@ if (normalized.length > 0 && !sdkSessionInfoRef.current?.firstMessage && onSessi
 
   const connectEvents = useCallback(async (sessionId: string): Promise<void> => {
     // 查找该会话是否已有 SSE 连接
-    let existingEs: EventSource | undefined
+    let existingEs: SessionEventsConnection | undefined
     for (const [es, sid] of eventSourceSessionMapRef.current) {
       if (sid === sessionId) {
         existingEs = es
@@ -1463,7 +1464,7 @@ if (normalized.length > 0 && !sdkSessionInfoRef.current?.firstMessage && onSessi
   useEffect(() => {
     return () => {
       // 组件卸载：关闭所有会话的 SSE，清理所有节流定时器
-      closeAllEventSources()
+      closeAllSessionEventsConnections()
       if (textDeltaTimerRef.current) {
         clearTimeout(textDeltaTimerRef.current)
         textDeltaTimerRef.current = null

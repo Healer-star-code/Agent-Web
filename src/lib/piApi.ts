@@ -146,19 +146,67 @@ function extractErrorMessage(data: unknown): string | undefined {
   return undefined
 }
 
+// access_token 15 分钟过期；401 时用 refresh_token Cookie 换新 token 并重试一次。
+// 并发请求共享同一次刷新，避免刷新接口被打爆。
+let refreshPromise: Promise<string | null> | null = null
+
+function refreshAccessToken(): Promise<string | null> {
+  if (!refreshPromise) {
+    refreshPromise = (async () => {
+      try {
+        const res = await fetch('/api/auth/refresh', { method: 'POST' })
+        const json = await res.json() as { code: number; data?: { access_token?: string } }
+        if (json.code === 200 && json.data?.access_token) {
+          const auth = getAuthUser()
+          if (auth) setAuthUser(auth.name, json.data.access_token)
+          return json.data.access_token
+        }
+        return null
+      } catch {
+        return null
+      }
+    })().finally(() => { refreshPromise = null })
+  }
+  return refreshPromise
+}
+
+function notifyAuthExpired(): void {
+  try { window.dispatchEvent(new CustomEvent('pi-auth-expired')) } catch { /* ignore */ }
+}
+
 async function requestJson<T>(path: string, init?: RequestInit, options?: { timeoutMs?: number | null }): Promise<T> {
   const timeoutMs = options?.timeoutMs === undefined ? 60000 : options?.timeoutMs
-  const controller = timeoutMs === null ? undefined : new AbortController()
-  const timer = timeoutMs === null ? undefined : setTimeout(() => controller?.abort(), timeoutMs)
   const base = getApiBase()
-  const headers = new Headers(init?.headers)
-  headers.set('Content-Type', 'application/json')
+
+  const doFetch = async (token: string | undefined): Promise<Response> => {
+    const controller = timeoutMs === null ? undefined : new AbortController()
+    const timer = timeoutMs === null ? undefined : setTimeout(() => controller?.abort(), timeoutMs)
+    const headers = new Headers(init?.headers)
+    headers.set('Content-Type', 'application/json')
+    if (token) headers.set('Authorization', `Bearer ${token}`)
+    try {
+      return await fetch(`${base}${path}`, {
+        ...init,
+        signal: controller?.signal,
+        headers,
+      })
+    } finally {
+      if (timer) clearTimeout(timer)
+    }
+  }
+
   try {
-    const res = await fetch(`${base}${path}`, {
-      ...init,
-      signal: controller?.signal,
-      headers,
-    })
+    let res = await doFetch(getAuthUser()?.token)
+    if (res.status === 401) {
+      const newToken = await refreshAccessToken()
+      if (newToken) {
+        res = await doFetch(newToken)
+      } else {
+        clearAuthUser()
+        notifyAuthExpired()
+        throw new Error('登录已过期，请重新登录')
+      }
+    }
     let data: unknown
     try {
       data = await res.json()
@@ -179,8 +227,6 @@ async function requestJson<T>(path: string, init?: RequestInit, options?: { time
       throw new Error('暂时连接不上超级小金服务。请检查：1. 超级小金是否已经启动；2. 服务器地址是否填对。如果刚修改过设置，稍等几秒会自动重试。')
     }
     throw normalizeError(err)
-  } finally {
-    if (timer) clearTimeout(timer)
   }
 }
 
@@ -228,6 +274,14 @@ export function clearAuthUser(): void {
   try {
     localStorage.removeItem(AUTH_KEY)
   } catch { /* ignore */ }
+}
+
+// 通知后端吊销 refresh_token 并清理本地登录态
+export async function logout(): Promise<void> {
+  try {
+    await fetch('/api/auth/logout', { method: 'POST' })
+  } catch { /* ignore */ }
+  clearAuthUser()
 }
 
 export async function login(username: string, password: string): Promise<AuthResult> {
@@ -516,16 +570,21 @@ function extractTextAndThinking(content: SuperKingContent[] | string | unknown):
   return { text, thinking }
 }
 
-export function connectSessionEvents(sessionId: string, onEvent: (event: WebAgentEvent) => void): EventSource {
+export interface SessionEventsConnection {
+  close(): void
+}
+
+// EventSource 不支持自定义请求头，带不了 JWT；改用 fetch 流式解析 SSE。
+export function connectSessionEvents(sessionId: string, onEvent: (event: WebAgentEvent) => void): SessionEventsConnection {
   const base = getApiBase()
-  const es = new EventSource(`${base}/sessions/${encodeURIComponent(sessionId)}/events`)
+  const controller = new AbortController()
+  let closed = false
 
   const state = {
     inTurn: false,
     assistantText: '',
     assistantThinking: '',
     thinkingOpen: false,
-    anyEventReceived: false,
     emittedToolIds: new Set<string>(),
   }
 
@@ -581,31 +640,13 @@ export function connectSessionEvents(sessionId: string, onEvent: (event: WebAgen
     onEvent({ type: 'agent_end' })
   }
 
-  function markConnectedOnce() {
-    if (state.anyEventReceived) return
-    state.anyEventReceived = true
-    onEvent({ type: 'connected', sessionId })
-  }
-
   function emitToolStart(toolCallId: string, toolName: string, args: unknown) {
     if (!toolCallId || state.emittedToolIds.has(toolCallId)) return
     state.emittedToolIds.add(toolCallId)
     onEvent({ type: 'tool_start', toolCallId, toolName, args })
   }
 
-  es.addEventListener('open', () => {
-    onEvent({ type: 'connected', sessionId })
-  })
-
-  es.addEventListener('message', (event) => {
-    markConnectedOnce()
-    let data: any
-    try {
-      data = JSON.parse((event as MessageEvent).data)
-    } catch {
-      return
-    }
-
+  function handleEventData(data: any) {
     const eventType = data?.type as string | undefined
     if (!eventType) return
 
@@ -750,13 +791,77 @@ export function connectSessionEvents(sessionId: string, onEvent: (event: WebAgen
       default:
         // ignore unknown event types
     }
-  })
-
-  es.onerror = () => {
-    onEvent({ type: 'error', message: '与服务器的事件连接已断开' })
   }
 
-  return es
+  async function connect(isRetry: boolean): Promise<void> {
+    const token = getAuthUser()?.token
+    const headers: Record<string, string> = { Accept: 'text/event-stream' }
+    if (token) headers.Authorization = `Bearer ${token}`
+    let res: Response
+    try {
+      res = await fetch(`${base}/sessions/${encodeURIComponent(sessionId)}/events`, {
+        headers,
+        signal: controller.signal,
+      })
+    } catch {
+      if (!closed) onEvent({ type: 'error', message: '与服务器的事件连接已断开' })
+      return
+    }
+    if (res.status === 401 && !isRetry) {
+      const newToken = await refreshAccessToken()
+      if (newToken) return connect(true)
+      clearAuthUser()
+      notifyAuthExpired()
+      onEvent({ type: 'error', message: '登录已过期，请重新登录' })
+      return
+    }
+    if (!res.ok || !res.body) {
+      if (!closed) onEvent({ type: 'error', message: '与服务器的事件连接已断开' })
+      return
+    }
+
+    onEvent({ type: 'connected', sessionId })
+
+    const reader = res.body.getReader()
+    const decoder = new TextDecoder()
+    let buffer = ''
+    try {
+      for (;;) {
+        const { done, value } = await reader.read()
+        if (done) break
+        buffer += decoder.decode(value, { stream: true })
+        let sepIdx: number
+        while ((sepIdx = buffer.indexOf('\n\n')) !== -1) {
+          const rawEvent = buffer.slice(0, sepIdx)
+          buffer = buffer.slice(sepIdx + 2)
+          const dataLines: string[] = []
+          for (const line of rawEvent.split('\n')) {
+            if (line.startsWith('data:')) dataLines.push(line.slice(5).replace(/^ /, ''))
+          }
+          if (dataLines.length === 0) continue
+          let parsed: any
+          try {
+            parsed = JSON.parse(dataLines.join('\n'))
+          } catch {
+            continue
+          }
+          handleEventData(parsed)
+        }
+      }
+    } catch {
+      // 主动 close() 或网络中断都会走到这里
+    }
+    if (!closed) onEvent({ type: 'error', message: '与服务器的事件连接已断开' })
+  }
+
+  void connect(false)
+
+  return {
+    close() {
+      closed = true
+      controller.abort()
+    },
+  }
 }
 
 // ---------------------------------------------------------------------------
