@@ -278,7 +278,7 @@ export default function App() {
     return () => window.removeEventListener('keydown', handler)
   }, [handleNewSession])
 
-  const handleSessionCreated = useCallback((session: SessionInfo) => {
+  const handleSessionCreated = useCallback((session: SessionInfo, isNew?: boolean) => {
     setSessions((current) => upsertSession(current, session))
     setSelectedSession((current) => {
       if (current?.id === session.id) {
@@ -289,15 +289,17 @@ export default function App() {
           name: session.name ?? current.name,
         }
       }
-      // 新建会话发消息场景：当前没有选中会话 -> 选中新创建的会话
-      if (!current) {
+      // 只有 handleSend 新建会话时才自动选中，后台事件不覆盖新建流程
+      if (!current && isNew) {
         try { localStorage.setItem('pi-last-session-id', session.id) } catch { /* ignore */ }
         return session
       }
       return current
     })
-    // 新建会话变成正式会话后清掉占位状态
-    setNewSessionCwd(null)
+    // 只有新建会话才清掉占位状态
+    if (isNew) {
+      setNewSessionCwd(null)
+    }
   }, [])
 
   const handleRenameSession = useCallback(async (session: SessionInfo, name: string) => {

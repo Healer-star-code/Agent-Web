@@ -54,7 +54,7 @@ interface Props {
   selectedCwd: string | null
   newSessionCwd: string | null
   chatInputRef: React.RefObject<ChatInputHandle | null>
-  onSessionCreated?: (session: SessionInfo) => void
+  onSessionCreated?: (session: SessionInfo, isNew?: boolean) => void
 }
 
 const APP_INSTITUTION = (import.meta.env.VITE_APP_INSTITUTION as string | undefined) ?? `v${__APP_VERSION__}`
@@ -1251,7 +1251,7 @@ if (normalized.length > 0 && !sdkSessionInfoRef.current?.firstMessage && onSessi
         modified: new Date().toISOString(),
       }
       sdkSessionInfoRef.current = updatedSession
-      onSessionCreated?.(updatedSession)
+      onSessionCreated?.(updatedSession, true)
 
       // ---- 附件处理：图片 base64 / 文档前端解析提取文本 ----
       const ready = (attachments ?? []).filter((a) => a.status === 'ready')
